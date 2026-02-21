@@ -19,7 +19,7 @@ lib64/
 wheels/
 
 .streamlit/
-secrets.toml
+.streamlit/secrets.toml
 
 # Virtual environments
 .env
