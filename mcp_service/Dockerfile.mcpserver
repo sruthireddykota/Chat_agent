@@ -1,0 +1,22 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY mcp_service/requirements_mcp.txt /app/
+COPY services/query_embeddings.py /app/services/query_embeddings.py 
+COPY services/qdrant_retrevial.py /app/services/qdrant_retrevial.py
+COPY services/chat_history_retrieval.py /app/services/chat_history_retrieval.py
+
+RUN pip install --no-cache-dir -r requirements_mcp.txt
+
+COPY mcp_service/mcp_server.py /app/
+
+EXPOSE 8000
+
+CMD ["fastmcp","run","/app/mcp_server.py","--transport","streamable-http","--host","0.0.0.0","--port","8000"]
+

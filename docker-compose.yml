@@ -1,0 +1,134 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    volumes:
+      - redis_cache:/data
+    restart: unless-stopped
+    networks:
+      - agent_framework
+    
+
+  mcp-server:
+    build: 
+      context: .
+      dockerfile: mcp_service/Dockerfile.mcpserver
+    container_name: mcpserver-fastmcp
+    ports:
+      - "8000:8000"
+    env_file:
+      - mcp_service/.env.mcp
+    depends_on:
+      - redis
+      - mongodb
+      - qdrant
+    networks:
+      - agent_framework
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD","curl", "-f","http://localhost:8000/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+
+  mongodb:
+    image: mongo:7.0
+    container_name: chatbot-mongodb
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "27017:27017"
+    networks:
+      - agent_framework
+    volumes:
+      - mongodb_data:/data/db
+    command: ["mongod", "--auth"]
+    healthcheck:
+      test: "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: mongo-express
+    restart: always
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - agent_framework
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_AUTH_DATABASE: admin
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      ME_CONFIG_BASICAUTH: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGOEXPRESS_BASICAUTH_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGOEXPRESS_BASICAUTH_PASSWORD}
+
+  docling-serve:
+    image: ghcr.io/docling-project/docling-serve-cpu:latest
+    container_name: docling-serve
+    ports:
+      - "5001:5001"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ocr_cache:/root/.EasyOCR
+    environment:
+      DOCLING_SERVE_ENABLE_UI: "1"
+      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
+      LOG_LEVEL: "INFO"
+    restart: unless-stopped
+    networks:
+      - agent_framework
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-vector-db
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - agent_framework
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_cache:
+  mongodb_data:
+  hf_cache:
+  ocr_cache:
+  qdrant_storage:
+
+networks:
+  agent_framework:
+    driver: bridge
+
