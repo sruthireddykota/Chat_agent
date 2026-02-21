@@ -1,13 +1,17 @@
+# Chat_agent
+
+## Project Structure
+```
 Chat_agent/
 │
 ├── Mongodb/
-│   ├── mongodb_server.py
+│   └── mongodb_server.py
 │
 ├── agents/
 │   ├── Coder.py
 │   ├── Generic.py
 │   ├── RAG_agent.py
-│   ├── Researcher.py
+│   └── Researcher.py
 │
 ├── azure_clients/
 │
@@ -29,13 +33,14 @@ Chat_agent/
 │   ├── embeddings.py
 │   ├── qdrant_retrevial.py
 │   ├── qdrant_store.py
-│   ├── query_embeddings.py
+│   └── query_embeddings.py
 │
 ├── utils/
-│   ├── logger.py
+│   └── logger.py
 │
 ├── docker-compose.yml
 ├── docling_chunker.py
 ├── login page logo.png
 ├── main.py
-├── requirements.txt
+└── requirements.txt
+```
