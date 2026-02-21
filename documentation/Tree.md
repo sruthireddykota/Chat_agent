@@ -39,7 +39,6 @@ Chat_agent/
 │   └── logger.py
 │
 ├── docker-compose.yml
-├── docling_chunker.py
 ├── login page logo.png
 ├── main.py
 └── requirements.txt

@@ -56,6 +56,7 @@ secrets/
 config/local_*.py
 
 .streamlit/secrets.toml
+documentation/
 
 # Jupyter
 .ipynb_checkpoints/

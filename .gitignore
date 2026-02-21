@@ -37,9 +37,18 @@ myvenv/
 .env.production
 secrets/
 
+#agents
+agents/Coder.py
+agents/Generic.py
+agents/RAG_agent.py
+agents/Researcher.py
+
 # Logs
 logs/
 *.log
+
+documentation/Demo Images/
+documentation/Demo videos/
 
 # OS
 .DS_Store
