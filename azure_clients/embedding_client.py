@@ -1,11 +1,12 @@
 from openai import AzureOpenAI
-import streamlit as st
-
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 def get_embedding_client():
     client=AzureOpenAI(
-        api_key=st.secrets["EMBEDDING_API_KEY"],
-        azure_endpoint=st.secrets["EMBEDDING_ENDPOINT"],
+        api_key=os.getenv("EMBEDDING_API_KEY"),
+        azure_endpoint=os.getenv("EMBEDDING_ENDPOINT"),
         api_version="2024-02-15-preview"
     )
     return client

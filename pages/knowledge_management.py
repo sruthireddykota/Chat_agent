@@ -1,4 +1,20 @@
 import streamlit as st 
+import requests
+
+API_BASE_URL = "http://fastapi:8001"
+
+def get_documents_api():
+    res = requests.get(f"{API_BASE_URL}/documents/get")
+    if res.status_code == 200:
+        return res.json()
+    return []
+
+def delete_document_api(document_id):
+    res = requests.delete(f"{API_BASE_URL}/documents/{document_id}")
+    if res.status_code == 200:
+        return res.json().get("deleted")
+    return False
+
 
 
 st.set_page_config(
@@ -19,9 +35,6 @@ st.markdown(
         unsafe_allow_html=True
     )
 
-if "mongodb" not in st.session_state:
-    from Mongodb.mongodb_server import MongoStore
-    st.session_state.mongodb=MongoStore()
 
 with st.sidebar:
     s_col1, s_col2, c3 = st.columns([5, 5, 1])
@@ -36,13 +49,17 @@ with st.sidebar:
 def document_delete(document_id):
     from services.qdrant_store import Qdrantservice
     try:
-        result=st.session_state.mongodb.delete_document(document_id=document_id)
+        result = delete_document_api(document_id)
+
         if result:
-            response=Qdrantservice().delete_vectors(document_id=document_id,collection="Documents")
+            response = Qdrantservice().delete_vectors(
+                document_id=document_id,
+                collection="Documents"
+            )
+
             if response == "completed":
                 return True
-            
-    except Exception as e:
+    except Exception:
         return False
     
 
@@ -52,7 +69,7 @@ st.title("Document Center",text_alignment="center")
 with st.container(border=True,horizontal_alignment="center",vertical_alignment="top",
                   height=500,width=1000):
     
-    documents_list = st.session_state.mongodb.get_documents()
+    documents_list = get_documents_api()
     col1,col2,col3,col4,col5,col6=st.columns([2,8,3,4,3,2])
     with col1:
         st.write(':blue[S No]')

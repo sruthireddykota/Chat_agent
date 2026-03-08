@@ -13,6 +13,7 @@ st.set_page_config(
 if "mongodb" not in st.session_state:
     from Mongodb.mongodb_server import MongoStore
     st.session_state.mongodb=MongoStore()
+    
 if "authenticated" not in st.session_state:
     st.session_state.authenticated='home'
 
@@ -98,7 +99,7 @@ if st.session_state.authenticated=='home':
     with st.empty().container(border=True):
         col1,col2 = st.columns([5,5])
         with col1:
-            st.image("login page logo.png")
+            st.image("login_page_logo.png")
         with col2:
             st.header("Multi Agent Chatbot",text_alignment="center")
             st.write("")

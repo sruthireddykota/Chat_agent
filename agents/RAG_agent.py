@@ -9,8 +9,8 @@ class RAG_agent:
         self.client=get_client()
         self.mcp_tool= MCPStreamableHTTPTool(
             name="mcp_tool",
-            url="http://localhost:8000/mcp")
-        
+            url="http://mcp-server:8000/mcp")
+
     async def rag_agent(self,query,session_id):
         logger=get_logger()
         

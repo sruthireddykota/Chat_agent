@@ -36,7 +36,7 @@ class Genericagent:
                 
                 store=lambda:RedisChatMessageStore(
                     thread_id=f"session_{session_id}",
-                    redis_url="redis://localhost:6379",
+                    redis_url="redis://redis:6379",
                     max_messages=5
                 )
                 

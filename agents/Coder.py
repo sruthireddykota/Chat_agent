@@ -29,7 +29,7 @@ class Codeagent:
                 if file_data.type.startswith("text/"):
                     
                     store=lambda:RedisChatMessageStore(
-                        redis_url="redis://localhost:6379",
+                        redis_url="redis://redis:6379",
                         max_messages=5,
                         thread_id=f"session_{session_id}")
                     
@@ -59,7 +59,7 @@ class Codeagent:
                     )
             else:
                 store=lambda:RedisChatMessageStore(
-                    redis_url="redis://localhost:6379",
+                    redis_url="redis://redis:6379",
                     max_messages=5,
                     thread_id=f"session_{session_id}"
                 )

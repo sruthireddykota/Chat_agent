@@ -1,19 +1,25 @@
+from itertools import count
 from pymongo import MongoClient, DESCENDING
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
+import os
+from utils.logger import get_logger
+
+logger=get_logger()
 
 class MongoStore:
     def __init__(self):
-        self._MONGO_URI = "mongodb://admin:strongpassword123@localhost:27017/?authSource=admin"
+        self._MONGO_URI = os.getenv("MONGO_URI") or \
+        f"mongodb://{os.getenv('MONGO_USER', 'admin')}:{os.getenv('MONGO_PASSWORD', 'strongpassword123')}@{os.getenv('MONGO_HOST')}:{os.getenv('MONGO_PORT', '27017')}/?authSource=admin"
         self._MONGODB_DB = "chatbot_db"
         self.KM_DB="documents_db"
         self.USERS_DB="users_db"
         try:
             self.client = MongoClient(self._MONGO_URI, serverSelectionTimeoutMS=3000)
             self.client.admin.command("ping")
-            print("Connected to MongoDB")
+            logger.info("Connected to MongoDB")
         except ConnectionFailure as e:
-            print("MongoDB connection failed:", e)
+            logger.error("MongoDB connection failed: %s", e)
             raise
         
         self.db = self.client[self._MONGODB_DB]
@@ -29,7 +35,7 @@ class MongoStore:
     
     def create_title(self, content):
         from azure_clients.title_azure_client import get_client
-        
+        logger.info("Generating title for content preview: %s", content.strip()[:50])
         client=get_client()
         content_preview=content.strip()[:200]
         response = client.chat.completions.create(
@@ -41,7 +47,6 @@ class MongoStore:
             max_tokens=10
         )
         title=response.choices[0].message.content
-        
         title = title.strip().strip('"').strip("'")
         return title
         
@@ -60,16 +65,25 @@ class MongoStore:
             "created_at": datetime.utcnow().isoformat(),
             "updated_at": datetime.utcnow().isoformat()
         })
-        return result.inserted_id
-    
+        return str(result.inserted_id)
+
     def get_sessions(self, user_id: str, limit: int = 10):
         sessions = self.sessions.find({'user_id': user_id}).sort("updated_at", DESCENDING).limit(limit)
-        return list(sessions)
+        result = []
+        for session in sessions:
+            session["_id"] = str(session["_id"])
+            result.append(session)
+
+        return result
     
     def get_chat_history(self, session_id: str, limit: int = 10):
         messages = self.messages.find({'session_id': session_id}).sort("timestamp", 1).limit(limit)
-        return list(messages)
-    
+        result = []
+        for message in messages:
+            message["_id"] = str(message["_id"])
+            result.append(message)
+        return result
+
     def save_message(self, message):
         result = self.messages.insert_one({
             "session_id": message.get("session_id"),
@@ -88,33 +102,37 @@ class MongoStore:
                 "$set": {"updated_at": datetime.utcnow().isoformat()}
             })
         
-        session_output = list(self.sessions.find({'session_id': message.get("session_id")}))
-        count = session_output[0].get("message_count")
         
-        if count == 1 and message.get("role") == "user":
-            content = message.get("content")
-            
-            if content and content.strip():
-                try:
-                    title = self.create_title(content)  
-                    if not isinstance(title, str):
-                        title = str(title) if title else "New Chat"
-                    title = title.strip()[:50]
-                except Exception as e:
-                    print(f"Error generating title: {e}")
-                    title = "New Chat"
-            else:
-                title = "New Chat"
+        if message.get("role") == "user":
+            session_output = list(self.sessions.find({'session_id': message.get("session_id")}))
+            count = session_output[0].get("message_count")
+            if count == 1:
+                content = message.get("content")
                 
-            self.sessions.update_one(
-                {"session_id": message.get("session_id")},
-                {
-                    "$set": {"title": title, "updated_at": datetime.utcnow().isoformat()}
-                }
-            )
-            
-        return result.inserted_id
-    
+                if content and content.strip():
+                    try:
+                        title = self.create_title(content)  
+                        if not isinstance(title, str):
+                            title = str(title) if title else "New Chat"
+                        logger.info("Generated title: %s", title)
+                        title = title.strip()[:50]
+                        
+                    except Exception as e:
+                        logger.error("Error generating title: %s", e)
+                        title = "New Chat"
+                else:
+                    logger.info("Content is empty or whitespace. Using default title.")
+                    title = "New Chat"
+                    
+                self.sessions.update_one(
+                    {"session_id": message.get("session_id")},
+                    {
+                        "$set": {"title": title, "updated_at": datetime.utcnow().isoformat()}
+                    }
+                )
+        logger.info(f"Saved message for session_id: {message.get('session_id')}, role: {message.get('role')}")
+        return str(result.inserted_id)
+
     def clear_chatmessages(self, session_id):
         result = self.messages.delete_many({"session_id": session_id})
         
@@ -124,27 +142,33 @@ class MongoStore:
                 "$set": {"message_count": 0, "updated_at": datetime.utcnow().isoformat()}
             }
         )
+        logger.info(f"Cleared chat messages for session_id: {session_id}, deleted_count: {result.deleted_count}")
         return result.deleted_count
     
     def delete_session(self, session_id):
         result = self.messages.delete_many({"session_id": session_id})
         if result:
             output = self.sessions.delete_one({"session_id": session_id})
+        
+        logger.info(f"Deleted session_id: {session_id}, messages_deleted: {result.deleted_count}, session_deleted: {output.deleted_count if result else 0}")
         return output.deleted_count > 0
     
     
     def store_documents(self,document_data):
-        response= self.documents.insert_one({
-            "document_name":document_data.get("document_name"),
-            "document_id":document_data.get("document_id"),
-            "document_type":document_data.get("document_type"),
-            "timestamp":document_data.get("timestamp"),
-            "chunk_count":document_data.get("chunk_count"),
-            "uploaded_by":document_data.get("uploaded_by"),
-            "tags":document_data.get("tags")
-        })
-        return response
-    
+        try:
+            self.documents.insert_one({
+                "document_name":document_data.get("document_name"),
+                "document_id":document_data.get("document_id"),
+                "document_type":document_data.get("document_type"),
+                "timestamp":document_data.get("timestamp"),
+                "chunk_count":document_data.get("chunk_count"),
+                "uploaded_by":document_data.get("uploaded_by"),
+                "tags":document_data.get("tags")
+            })
+            return True 
+        except Exception as e:
+            raise e
+        
     def delete_document(self,document_id):
         response=self.documents.delete_one({
             "document_id":document_id
@@ -154,7 +178,11 @@ class MongoStore:
     def get_documents(self):
         response=self.documents.find().sort("timestamp",1)
         
-        return list(response)
+        result = []
+        for message in response:
+            message["_id"] = str(message["_id"])
+            result.append(message)
+        return result
     
     def create_user(self,user_data):
         try:

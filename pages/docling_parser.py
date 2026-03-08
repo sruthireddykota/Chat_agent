@@ -4,6 +4,17 @@ import json
 import requests
 import uuid
 from datetime import datetime
+import requests
+
+API_BASE_URL = "http://fastapi:8001"
+
+def store_document_api(document_data):
+    url = f"{API_BASE_URL}/documents/store"
+    res = requests.post(url,json=document_data)
+    if res.status_code == 200:
+        return res.json()
+    return None
+
 
 st.set_page_config(
     page_title="Document Parser",
@@ -54,7 +65,7 @@ def clear_session_state():
     
 def document_pipeline(parse_result,tab,file_data=None):
     if parse_result is not None:
-        with st.expander(f'filename: :blue[{doc.get("filename")}]'):
+        with st.expander(f'filename: :blue[{file_data.get("document_name")}]'):
             st.markdown(f'content: {parse_result}')
             
         chunk_button=st.button(":green[Generate Chunks]",key=f"chunk_generation_{tab}")
@@ -96,7 +107,7 @@ def document_pipeline(parse_result,tab,file_data=None):
                     }
                     success,message=service.store_embeddings("Documents",st.session_state.embedding_result,chunk_data)
                     if success:
-                        from Mongodb.mongodb_server import MongoStore
+                        
                         document_data={
                             "document_name":file_data.get("document_name"),
                             "document_id":file_data.get("document_id"),
@@ -106,17 +117,18 @@ def document_pipeline(parse_result,tab,file_data=None):
                             "uploaded_by":file_data.get("uploaded_by"),
                             "tags":file_data.get("tags")
                         }
-                        response=MongoStore().store_documents(document_data=document_data)
+                        response=store_document_api(document_data=document_data)
                         if response:
-                            
                             st.success(f"Payload Successfully stored in vector Database, {message}")
                             
 def get_vision_config():
-    
-    end_point=st.secrets["VISION_END_PONIT"]
-    api_key=st.secrets["AZURE_OPENAI_API_KEY"]
-    deployment_name=st.secrets["VISION_DEPLOYMENT_NAME"]
-    
+    from dotenv import load_dotenv
+    import os
+    load_dotenv()
+    end_point=os.getenv("VISION_END_POINT")
+    api_key=os.getenv("AZURE_OPENAI_API_KEY")
+    deployment_name=os.getenv("VISION_DEPLOYMENT_NAME")
+
     api_config={
         "url":end_point,
         "concurrency":1,
@@ -206,7 +218,7 @@ with tab1:
                             data["picture_description_api"]=json.dumps(get_vision_config())
                         
                         response= requests.post(
-                            url="http://localhost:5001/v1/convert/file",
+                            url="http://docling-serve:5001/v1/convert/file",
                             data=data,
                             files=files,
                             timeout=600,
@@ -310,7 +322,7 @@ with tab2:
                         }
                         
                         response= requests.post(
-                            url="http://localhost:5001/v1/convert/source",
+                            url="http://docling-serve:5001/v1/convert/source",
                             json=payload,
                             headers={'Content-Type': 'application/json'},
                             timeout=600

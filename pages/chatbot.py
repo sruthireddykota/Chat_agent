@@ -3,6 +3,43 @@ import streamlit as st
 import uuid
 from datetime import datetime
 import base64
+import requests
+
+API_BASE_URL = "http://fastapi:8001"
+
+
+def create_session_api(session_id, user_id):
+    url = f"{API_BASE_URL}/session/create"
+    res = requests.post(url, json={"session_id": session_id, "user_id": user_id})
+    return res.json()
+
+
+def get_sessions_api(user_id, limit=20):
+    url = f"{API_BASE_URL}/sessions/{user_id}"
+    res = requests.get(url, params={"limit": limit})
+    return res.json()
+
+
+def get_chat_messages_api(session_id):
+    url = f"{API_BASE_URL}/chat/{session_id}"
+    res = requests.get(url, params={"limit": 30})
+    return res.json()
+
+
+def save_message_api(message):
+    url = f"{API_BASE_URL}/message"
+    requests.post(url, json=message)
+
+
+def clear_chat_api(session_id):
+    url = f"{API_BASE_URL}/chat/{session_id}"
+    requests.delete(url)
+
+
+def delete_session_api(session_id):
+    url = f"{API_BASE_URL}/session/delete"
+    res = requests.delete(url, params={"session_id": session_id})
+    return res.json()
 
 def streamlit_executor():
     st.set_page_config(
@@ -21,39 +58,38 @@ def streamlit_executor():
         """,
         unsafe_allow_html=True
     )
-            
-    if "mongodb" not in st.session_state:
-        from Mongodb.mongodb_server import MongoStore
-        st.session_state.mongodb=MongoStore()
+    
+    user_id=st.session_state.get("user_id")
+    
         
     if "selected_agent" not in st.session_state:
         st.session_state.selected_agent="Generic"
         
     if "current_session" not in st.session_state:
-        existing_sessions = st.session_state.mongodb.get_sessions(user_id="admin", limit=1)
+        existing_sessions = get_sessions_api(user_id, limit=1)
         if existing_sessions and len(existing_sessions) > 0:
             st.session_state.current_session = existing_sessions[0].get("session_id")
-        else:    
-            sid=str(uuid.uuid4())
-            MongoStore().create_session(session_id=sid, user_id="admin")
+        else:
+            sid = str(uuid.uuid4())
+            create_session_api(sid, user_id)
             st.session_state.current_session=sid
         
     def new_chat():
         sid=str(uuid.uuid4())
-        result=st.session_state.mongodb.create_session(session_id=sid,user_id="admin")
+        result = create_session_api(session_id=sid, user_id=user_id)
         if result:
             st.session_state.current_session=sid
     
     def clear_chat(session_id):
-        result=st.session_state.mongodb.clear_chatmessages(session_id=session_id)
+        result=clear_chat_api(session_id=session_id)
     
     def get_chat_messages(session_id):
-        result=st.session_state.mongodb.get_chat_history(session_id=session_id,limit=30)
+        result=get_chat_messages_api(session_id=session_id)
         return result
     
     def save_message(message):
         try:
-            st.session_state.mongodb.save_message(message=message)
+            save_message_api(message=message)
         except Exception as e:
             print(f"Error saving message: {e}")
             
@@ -72,9 +108,9 @@ def streamlit_executor():
         else:
             from agents.Generic import generic_executor 
             return generic_executor(query=query,session_id=session_id)
-    
-    def get_session_list():        
-        result=st.session_state.mongodb.get_sessions(user_id="admin",limit=20)
+
+    def get_session_list():
+        result=get_sessions_api(user_id, limit=20)
         sessions_list=[]
         session_titles=[]
         
@@ -117,7 +153,7 @@ def streamlit_executor():
                     st.rerun()
             with col2:
                 if st.button(label=":red[Delete]",key=f'delete_key{ids}'):
-                    result=st.session_state.mongodb.delete_session(session_id=ids)
+                    result = delete_session_api(ids)
                     if result:
                         current_session=st.session_state.current_session
                         if current_session==ids:
@@ -157,8 +193,8 @@ def streamlit_executor():
                  "content":query.text,
                  "timestamp":datetime.utcnow().isoformat(),
                  "agent_name":st.session_state.selected_agent,
-                 "user_id":"admin"}
-        
+                 "user_id":user_id}
+
         image_source = None
         
         if len(query.files) > 0 and query.files[0].type.startswith('image/'):
@@ -191,8 +227,8 @@ def streamlit_executor():
                  "content":output,
                  "timestamp":datetime.utcnow().isoformat(),
                  "agent_name":st.session_state.selected_agent,
-                 "user_id":"admin"}
-        
+                 "user_id":user_id}
+
         save_message(message=message)
         
         st.rerun()
