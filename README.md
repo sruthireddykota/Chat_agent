@@ -1,260 +1,304 @@
-# Agents Module Documentation
+# Chat Agent — Multi-Agent AI Chatbot System
 
-## Presentation Link
+A modular, multi-agent AI chatbot built with Streamlit and FastAPI, featuring specialized agents for general conversation, code analysis, document retrieval (RAG), and real-time web research. Supports multi-modal input, streaming responses, Redis-backed conversation history, and a full document ingestion pipeline backed by Qdrant and MongoDB.
 
-[view presentation](https://gamma.app/docs/Multi-Agent-Chatbot-System-86qc53lupy60giu)
-
-
-## Overview
-
-The agents module provides a collection of specialized AI agents designed to handle different types of user queries and tasks. Each agent is optimized for a specific use case — from general conversation to code analysis, document retrieval, and web research. Users select the desired agent from the sidebar based on their query requirements.
-
-| Agent | Purpose | Key Features |
-|-------|---------|--------------|
-| **Generic Agent** | General conversation and file analysis | Multi-modal input, Redis message history |
-| **Coder Agent** | Code analysis, debugging, and execution | Code interpreter, syntax analysis, runtime testing |
-| **RAG Agent** | Document retrieval and Q&A | Knowledge base search, citation tracking, context awareness |
-| **Researcher Agent** | Real-time web search and research | Brave Search integration, multi-source synthesis |
+![View Presentation](https://gamma.app/docs/Multi-Agent-Chatbot-System-86qc53lupy60giu)
 
 ---
 
-## System Architecture
+## Table of Contents
 
-All agents share a consistent architecture built on three core components: an **Azure Client** for LLM connectivity, the **Microsoft Agent Framework** for agent creation, tool integration, and streaming responses, and **Message Stores** supporting in-memory, Redis-backed, and MongoDB conversation history.
-
-### Data Flow
-
-1. User input arrives with optional file attachments
-2. Uploaded files are detected and handled based on type (text, image, document)
-3. The appropriate message store is selected (in-memory, Redis, or MongoDB via MCP)
-4. The `ChatAgent` is initialized with instructions, tools, and the message store
-5. The agent executes and streams response chunks to the caller
-6. Exceptions are logged and managed throughout the pipeline
-
-### Executor Pattern
-
-Each agent implements an executor function that creates a new event loop for async operations, manages the async generator lifecycle, yields response chunks to the caller, and ensures proper cleanup and logging.
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Agents](#agents)
+- [Pages](#pages)
+- [Services](#services)
+- [MCP Server](#mcp-server)
+- [Configuration](#configuration)
+- [Getting Started](#getting-started)
+- [Docker](#docker)
+- [Dependencies](#dependencies)
 
 ---
 
-## Agent Modules
+## Features
 
-### Generic Agent — `Generic.py`
-
-Handles general-purpose conversations and basic file analysis. Serves as the default agent for queries that do not require specialized tools or knowledge retrieval.
-
-**Features:** multi-modal input (text, images, documents), Redis-backed conversation history, file content analysis, and session-based message storage with configurable history limits.
-
-**Method: `generic_agent(query, session_id)`**
-
-- Detects file attachments and creates multi-modal messages using `DataContent`
-- Uses in-memory `ChatMessageStore` for file-based queries to avoid storing binary data in Redis
-- Uses `RedisChatMessageStore` for text-only queries to maintain conversation history
-- Streams responses through the `ChatAgent` framework
-
-**Instructions:** analyze file context before responding when files are present; provide answers strictly from the given context; maintain simplicity and accuracy.
+- **4 specialized AI agents** — Generic, Coder, RAG, and Researcher
+- **Streaming responses** via the Microsoft Agent Framework
+- **Multi-modal input** — text, images, and documents
+- **Redis-backed conversation history** with configurable message limits
+- **MongoDB** for persistent chat session storage
+- **Qdrant** vector database for semantic document retrieval
+- **Document ingestion pipeline** — parse, chunk, embed, and store documents
+- **MCP integration** for RAG retrieval, chat history, and Brave web search
+- **FastAPI backend** for agent orchestration
+- **Dockerized** deployment with `docker-compose`
 
 ---
-
-### Coder Agent — `Coder.py`
-
-Specializes in code analysis, debugging, and execution through integrated tools and structured response formatting.
-
-**Features:** `HostedCodeInterpreterTool` for code execution, structured markdown responses, text and image file handling, and Redis-backed conversation history for iterative debugging.
-
-**Method: `coder_agent(query, session_id)`**
-
-File handling logic:
-- **Text files** — decoded as UTF-8, embedded in code blocks, stored in Redis for conversation history
-- **Image files** — processed as `DataContent` with media type, stored in-memory to avoid Redis binary storage
-
-**Response structure:**
-1. **Summary** — brief explanation of actions taken
-2. **Code Analysis** — findings with severity levels
-3. **Solution** — code fixes in Python blocks
-4. **Execution** — runtime results and output
-5. **Next Steps** — recommendations for improvements
-
-The `HostedCodeInterpreterTool` is invoked when the user requests code execution or testing, when solution verification is needed, or when runtime analysis is required.
-
-**Behavior guidelines:** if a file is provided, analyze it thoroughly before responding; if a query accompanies a file, use the file as context; if only a file is provided, give a comprehensive unprompted analysis.
-
----
-
-### RAG Agent — `RAG_agent.py`
-
-Answers questions using a knowledge base via MCP integration. Retrieves relevant documents, tracks citations, and provides responses grounded strictly in retrieved content.
-
-**Features:** MCP integration for document retrieval, conversation history for follow-up questions, citation tracking, and hallucination prevention.
-
-**Available tools:**
-
-- `rag_retrieval(query: str)` — retrieves top-ranked document chunks from the knowledge base via semantic similarity
-- `get_history()` — fetches previous conversation turns to support context-aware follow-ups
-
-**Query processing logic:**
-
-1. Classify the query as a follow-up or a new question
-   - Follow-up: call `get_history()` then `rag_retrieval()`
-   - New query: call `rag_retrieval()` immediately
-2. If retrieved context is irrelevant, return `"No relevant data found for the query, try again later"`; otherwise generate a structured response with citations
-
----
-
-### Researcher Agent — `Researcher.py`
-
-Provides real-time web search via the Brave Search API, synthesizing information from multiple sources for current events and research queries.
-
-**Features:** real-time web search, time-based result filtering, source citation, and Redis conversation history.
-
-**Tool: `web_search(query: str, freshness: str)`**
-
-The `freshness` parameter filters results by recency: `pd` (past day), `pw` (past week), `pm` (past month), `py` (past year).
-
-**Search strategy:**
-
-| Query Type | Strategy |
-|------------|----------|
-| Current events | Search directly with an appropriate freshness filter |
-| Technical topics | Search Wikipedia first for background, then recent sources for updates |
-| Comparisons | Search each item separately for comprehensive coverage |
-| Latest/recent queries | Use `pd` or `pw` freshness filters |
-
----
-
-## Dependencies and Configuration
-
-**Core framework:** `agent_framework` (ChatAgent, ChatMessage, Role, DataContent), `agent_framework.redis` (RedisChatMessageStore), `azure_clients.azure_client` (get_client)
-
-**Tools and services:** `HostedCodeInterpreterTool` (Coder Agent), `MCPStreamableHTTPTool` (RAG and Researcher Agents)
-
-**Utilities:** `utils.logger` via `get_logger()`, `asyncio` for event loop management
-
-**Redis** — URL: `redis://localhost:6379`, max messages: 5, thread ID format: `session_{session_id}`
-
-**MCP Server** — URL: `http://localhost:8000/mcp`, tools: `rag_retrieve`, `get_chat_history`, `brave_web_search`
-
-**Azure Client** — all agents use the centralized client from `azure_clients.azure_client.get_client()`
-
-
-# Pages Module Documentation
-
-## Overview
-
-The `pages/` module contains the three main Streamlit UI pages of the Chat Agent system. Each page is a self-contained interface responsible for a distinct part of the user workflow.
-
-| File | Page Title | Purpose |
-|------|------------|---------|
-| `chatbot.py` | Chat Agent | Conversational interface for interacting with AI agents |
-| `docling_parser.py` | Document Parser | Upload and parse documents for ingestion into the knowledge base |
-| `knowledge_management.py` | Knowledge Management | View and manage documents stored in the knowledge base |
-
----
-
-## `chatbot.py` — Chat Interface
-
-The main conversational UI page. Users can select an AI agent, start new chat sessions, switch between previous sessions, and stream responses in real time. All messages are persisted to MongoDB.
-
-**Sidebar** contains a home button, agent selector, new/clear chat buttons, and a session list. The input widget accepts both text and file attachments.
-
-**Message flow** when a query is submitted:
-1. Build a user message dict
-2. If an image file is attached, encode it as base64 and store it
-3. Display the user message immediately in the chat UI
-4. Save the user message to MongoDB
-
----
-
-## `docling_parser.py` — Document Parser
-
-A pipeline UI for parsing documents (files or URLs) using a Docling-compatible REST API, then generating chunks, embeddings, and storing them in Qdrant and MongoDB. Supports multiple output formats and configurable parsing options.
-
-### Sidebar Settings
-
-| Setting | Widget | Default | Description |
-|---------|--------|---------|-------------|
-| Output format | `selectbox` | `md` | Output format: `md`, `json`, `html`, `text` |
-| Enable OCR | `checkbox` | Off | Optical character recognition |
-| Enable Table Extraction | `checkbox` | On | Extracts table structure |
-| Enable Picture Description | `checkbox` | On | Generates image descriptions via Vision API |
-| Enable Code Enrichment | `checkbox` | Off | Enriches code blocks |
-| Enable Formula Enrichment | `checkbox` | Off | Enriches mathematical formulas |
-| Image Scale | `slider` | `2` | Image resolution scale (1–3) |
-| Table Extraction Mode | `selectbox` | `Fast` | `Fast` or `Accurate` |
-
-### URL Processing (Tab 2)
-
-Accepts one or more URLs. On "Process URL" click, the input is split and stripped into individual URLs.
-
-### Document Pipeline
-
-The `document_pipeline()` function is shared between both tabs and implements a sequential, guided workflow — each step only appears after the previous button is clicked:
-
-```
-Parse Result
-    └──▶ View Content
-         └──▶ Generate Chunks
-              └──▶ View Chunks
-                   └──▶ Generate Embeddings
-                        └──▶ View Embedding Count
-                             └──▶ Store Embeddings
-                                  └──▶ Qdrant + MongoDB storage
-```
-
----
-
-## `knowledge_management.py` — Knowledge Management
-
-A document management dashboard that lists all documents stored in the knowledge base. Users can view document metadata and delete individual documents, which removes them from both MongoDB and Qdrant simultaneously.
-
-# Chat_agent
 
 ## Project Structure
+
 ```
 Chat_agent/
 │
-├── Mongodb/
-│   └── mongodb_server.py
+├── agents/                         # Specialized AI agent modules
+│   ├── Coder.py                    # Code analysis, debugging & execution agent
+│   ├── Generic.py                  # General-purpose conversation agent
+│   ├── RAG_agent.py                # Document retrieval & Q&A agent
+│   ├── Researcher.py               # Real-time web search & research agent
+│   ├── rag_agent_evaluation.py     # RAG agent evaluation utilities
+│   └── __init__.py
 │
-├── agents/
-│   ├── Coder.py
-│   ├── Generic.py
-│   ├── RAG_agent.py
-│   └── Researcher.py
+├── azure_clients/                  # Azure LLM client setup
 │
-├── azure_clients/
+├── config/                         # App configuration
+│   ├── settings.py                 # Centralized settings (Redis, MCP, Azure URLs)
+│   └── __init__.py
 │
-├── logs/
-│
-├── mcp_service/
+├── mcp_service/                    # MCP server for tools
+│   ├── mcp_server.py               # Exposes rag_retrieve, get_chat_history, brave_web_search
+│   ├── requirements_mcp.txt
 │   ├── Dockerfile.mcpserver
-│   ├── mcp_server.py
-│   └── requirements_mcp.txt
+│   └── __init__.py
 │
-├── pages/
-│   ├── chatbot.py
-│   ├── docling_parser.py
-│   └── knowledge_management.py
+├── Mongodb/                        # MongoDB integration
+│   ├── mongodb_server.py           # Chat session persistence
+│   └── __init__.py
 │
-├── services/
-│   ├── chat_history_retrieval.py
-│   ├── chunking.py
-│   ├── embeddings.py
-│   ├── qdrant_retrevial.py
-│   ├── qdrant_store.py
-│   └── query_embeddings.py
+├── pages/                          # Streamlit UI pages
+│   ├── chatbot.py                  # Main chat interface
+│   ├── docling_parser.py           # Document parsing & ingestion pipeline
+│   ├── knowledge_management.py     # View & manage knowledge base documents
+│   ├── rag_evaluation.py           # RAG evaluation dashboard
+│   └── __init__.py
+│
+├── services/                       # Core backend services
+│   ├── chat_history_retrieval.py   # Fetch conversation history
+│   ├── chunking.py                 # Document chunking logic
+│   ├── embeddings.py               # Embedding generation
+│   ├── qdrant_retrevial.py         # Semantic search in Qdrant
+│   ├── qdrant_store.py             # Store embeddings in Qdrant
+│   ├── query_embeddings.py         # Query embedding utilities
+│   └── __init__.py
 │
 ├── utils/
-│   └── logger.py
+│   ├── logger.py                   # Centralized logging via get_logger()
+│   ├── rag_metrics.py              # RAG evaluation metrics
+│   └── __init__.py
 │
-├── docker-compose.yml
-├── login page logo.png
-├── main.py
-├── Dockerfile.chatapp
-├── Dockerfile.fastapi
-├── fastapi_chatapp.py
-└── requirements.txt
-└── LICENSE
+├── assets/                         # Static assets (images, logos)
+├── logs/                           # Application logs
+├── qdrant_storage/                 # Local Qdrant storage volume
+├── tests/                          # Test suite
+│
+├── main.py                         # Streamlit app entry point
+├── fastapi_chatapp.py              # FastAPI backend for agent orchestration
+├── docker-compose.yml              # Multi-service Docker orchestration
+├── Dockerfile.chatapp              # Streamlit app container
+├── Dockerfile.fastapi              # FastAPI backend container
+├── requirements.txt
 └── README.md
+```
+
+---
+
+## Agents
+
+All agents share a consistent architecture: an **Azure Client** for LLM connectivity, the **Microsoft Agent Framework** for agent creation and streaming, and configurable **message stores** (in-memory, Redis, or MongoDB).
+
+### Generic Agent — `agents/Generic.py`
+
+General-purpose conversational agent. Default for queries that don't require specialized tools.
+
+- Multi-modal input (text, images, documents)
+- Redis-backed conversation history for text queries
+- In-memory store for file-based queries (avoids storing binary data in Redis)
+- Session-based history with configurable limits
+
+### Coder Agent — `agents/Coder.py`
+
+Specialized for code analysis, debugging, and execution.
+
+- `HostedCodeInterpreterTool` for live code execution
+- Structured markdown responses: Summary → Code Analysis → Solution → Execution → Next Steps
+- Text files embedded in code blocks and stored in Redis
+- Image files processed as `DataContent` with in-memory storage
+- Redis-backed history for iterative debugging sessions
+
+### RAG Agent — `agents/RAG_agent.py`
+
+Answers questions from a knowledge base via MCP-integrated document retrieval.
+
+- `rag_retrieval(query)` — semantic similarity search over document chunks
+- `get_history()` — fetches prior conversation turns for follow-up awareness
+- Classifies each query as new or follow-up before retrieval
+- Citation tracking and hallucination prevention
+- Returns `"No relevant data found"` when context is insufficient
+
+### Researcher Agent — `agents/Researcher.py`
+
+Real-time web research using the Brave Search API.
+
+- `web_search(query, freshness)` with recency filters: `pd` / `pw` / `pm` / `py`
+- Redis conversation history across research sessions
+- Search strategy by query type:
+
+| Query Type | Strategy |
+|---|---|
+| Current events | Direct search with freshness filter |
+| Technical topics | Wikipedia first, then recent sources |
+| Comparisons | Search each item separately |
+| Latest/recent | Use `pd` or `pw` freshness |
+
+---
+
+## Pages
+
+### `pages/chatbot.py` — Chat Interface
+
+Main conversational UI. Supports agent selection, session management, and real-time streaming.
+
+- Sidebar: agent selector, new/clear chat, session history list
+- Input: text + file attachments (images encoded as base64)
+- All messages persisted to MongoDB
+
+### `pages/docling_parser.py` — Document Parser
+
+Pipeline UI for ingesting documents (files or URLs) into the knowledge base.
+
+**Sidebar settings:** output format (`md`/`json`/`html`/`text`), OCR, table extraction, picture description, code enrichment, formula enrichment, image scale, and table extraction mode.
+
+**Pipeline flow:**
 
 ```
+Parse → View Content → Generate Chunks → View Chunks
+     → Generate Embeddings → View Count → Store (Qdrant + MongoDB)
+```
+
+### `pages/knowledge_management.py` — Knowledge Management
+
+Dashboard for viewing and managing stored documents. Supports deletion from both MongoDB and Qdrant simultaneously.
+
+### `pages/rag_evaluation.py` — RAG Evaluation
+
+Dashboard for evaluating RAG agent performance using metrics from `utils/rag_metrics.py`.
+
+---
+
+## Services
+
+| Service | File | Description |
+|---|---|---|
+| Chat History | `chat_history_retrieval.py` | Retrieve prior conversation turns |
+| Chunking | `chunking.py` | Split documents into chunks for embedding |
+| Embeddings | `embeddings.py` | Generate vector embeddings from text |
+| Qdrant Retrieval | `qdrant_retrevial.py` | Semantic search over stored embeddings |
+| Qdrant Store | `qdrant_store.py` | Persist embeddings into Qdrant |
+| Query Embeddings | `query_embeddings.py` | Embed user queries for retrieval |
+
+---
+
+## MCP Server
+
+**File:** `mcp_service/mcp_server.py`  
+**URL:** `http://localhost:8000/mcp`
+
+Exposes three tools used by agents:
+
+| Tool | Used By | Description |
+|---|---|---|
+| `rag_retrieve` | RAG Agent | Semantic search over the knowledge base |
+| `get_chat_history` | RAG Agent | Fetch prior conversation turns |
+| `brave_web_search` | Researcher Agent | Real-time web search via Brave API |
+
+---
+
+## Configuration
+
+**File:** `config/settings.py`
+
+| Setting | Value |
+|---|---|
+| Redis URL | `redis://localhost:6379` |
+| Redis max messages | `5` |
+| Redis thread ID format | `session_{session_id}` |
+| MCP server URL | `http://localhost:8000/mcp` |
+| Azure Client | `azure_clients.azure_client.get_client()` |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- Redis
+- MongoDB
+- Qdrant
+- Node.js (for document parsing)
+- Brave Search API key (for Researcher agent)
+
+### Installation
+
+```bash
+git clone https://github.com/sruthireddykota/Chat_agent.git
+cd Chat_agent
+
+python -m venv myvenv
+source myvenv/bin/activate  # Windows: myvenv\Scripts\activate
+
+pip install -r requirements.txt
+```
+
+### Running Locally
+
+```bash
+# Start the MCP server
+cd mcp_service
+pip install -r requirements_mcp.txt
+python mcp_server.py
+
+# Start the FastAPI backend
+python fastapi_chatapp.py
+
+# Start the Streamlit app
+streamlit run main.py
+```
+
+---
+
+## Docker
+
+All services are orchestrated via `docker-compose.yml`.
+
+```bash
+docker-compose up --build
+```
+
+**Dockerfiles:**
+
+| File | Service |
+|---|---|
+| `Dockerfile.chatapp` | Streamlit UI |
+| `Dockerfile.fastapi` | FastAPI backend |
+| `mcp_service/Dockerfile.mcpserver` | MCP server |
+
+---
+
+## Dependencies
+
+Core dependencies from `requirements.txt`:
+
+- `streamlit` — UI framework
+- `fastapi` / `uvicorn` — API backend
+- `agent_framework` — Microsoft Agent Framework (ChatAgent, streaming, tools)
+- `redis` — conversation history
+- `pymongo` — MongoDB integration
+- `qdrant-client` — vector store
+- `asyncio` — async agent execution
+
+---
+
+## License
+
+See [LICENSE](./LICENSE) for details.
