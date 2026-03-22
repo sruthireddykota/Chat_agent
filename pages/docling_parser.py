@@ -5,8 +5,12 @@ import requests
 import uuid
 from datetime import datetime
 import requests
+from config.settings import settings
+from PIL import Image
 
-API_BASE_URL = "http://fastapi:8001"
+parser_icon=Image.open("assets/parsing.png")
+
+API_BASE_URL = settings.API_BASE_URL
 
 def store_document_api(document_data):
     url = f"{API_BASE_URL}/documents/store"
@@ -18,7 +22,7 @@ def store_document_api(document_data):
 
 st.set_page_config(
     page_title="Document Parser",
-    page_icon="🔍",
+    page_icon=parser_icon,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -389,6 +393,3 @@ with tab2:
             with st.expander(f'filename: :blue[{doc.get("filename")}]s'):
                 st.json(doc.get("json_content"))
                     
-                
-                    
-            

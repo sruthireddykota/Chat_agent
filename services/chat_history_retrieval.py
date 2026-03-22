@@ -1,16 +1,12 @@
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
-import os
+from config.settings import settings
 
 class MongoStore:
     def __init__(self):
-        user=os.getenv("MONGO_USER")
-        password=os.getenv("MONGO_PASSWORD")
-        host=os.getenv("MONGO_HOST")
-        port=os.getenv("MONGO_PORT")
         
-        self._MONGO_URI = f'mongodb://{user}:{password}@{host}:{port}/?authSource=admin'
-        self._MONGODB_DB = os.getenv("MONGODB_MESSAGEDB_NAME")
+        self._MONGO_URI = settings.MONGODB_URI
+        self._MONGODB_DB = settings.MONGODB_DB
         try:
             self.client = MongoClient(self._MONGO_URI, serverSelectionTimeoutMS=3000)
             self.client.admin.command("ping")

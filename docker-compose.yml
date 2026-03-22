@@ -15,6 +15,7 @@ services:
     restart: unless-stopped
     networks:
       - agent_framework
+      - n8n_external_network
 
   mongodb:
     image: mongo:7.0
@@ -26,6 +27,7 @@ services:
       - "27017:27017"
     networks:
       - agent_framework
+      - n8n_external_network
     volumes:
       - mongodb_data:/data/db
     command: ["mongod", "--auth"]
@@ -104,7 +106,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - mcp_service/.env.mcp
+      - .env
     depends_on:
       mongodb:
         condition: service_healthy
@@ -114,6 +116,7 @@ services:
         condition: service_healthy
     networks:
       - agent_framework
+      - n8n_external_network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -135,7 +138,7 @@ services:
     networks:
       - agent_framework
     env_file:
-      - .env.docker
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -157,7 +160,7 @@ services:
     networks:
       - agent_framework
     env_file:
-      - .env.docker
+      - .env
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
@@ -173,4 +176,6 @@ volumes:
 
 networks:
   agent_framework:
+    driver: bridge
+  n8n_external_network:
     driver: bridge

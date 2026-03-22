@@ -11,6 +11,7 @@ COPY mcp_service/requirements_mcp.txt /app/
 COPY services/query_embeddings.py /app/services/query_embeddings.py 
 COPY services/qdrant_retrevial.py /app/services/qdrant_retrevial.py
 COPY services/chat_history_retrieval.py /app/services/chat_history_retrieval.py
+COPY ./config/ /app/config/
 
 RUN pip install --no-cache-dir -r requirements_mcp.txt
 

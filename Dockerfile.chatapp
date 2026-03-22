@@ -18,7 +18,8 @@ COPY ./pages/ /app/pages/
 COPY ./services/ /app/services/
 COPY ./utils/ /app/utils/
 COPY main.py /app/main.py
-COPY ./login_page_logo.png /app/
+COPY ./assets/ /app/assets/
+COPY ./config/ /app/config/
 
 EXPOSE 8501
 

@@ -2,7 +2,7 @@ from agent_framework import HostedCodeInterpreterTool,ChatAgent,ChatMessageStore
 from agent_framework.redis import RedisChatMessageStore
 from utils.logger import get_logger
 import asyncio
-
+from config.settings import settings
 
 logger=get_logger()
 
@@ -29,7 +29,7 @@ class Codeagent:
                 if file_data.type.startswith("text/"):
                     
                     store=lambda:RedisChatMessageStore(
-                        redis_url="redis://redis:6379",
+                        redis_url=settings.REDIS_URL,
                         max_messages=5,
                         thread_id=f"session_{session_id}")
                     

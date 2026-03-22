@@ -2,18 +2,18 @@ from itertools import count
 from pymongo import MongoClient, DESCENDING
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
-import os
 from utils.logger import get_logger
+from config.settings import settings
 
 logger=get_logger()
 
 class MongoStore:
     def __init__(self):
-        self._MONGO_URI = os.getenv("MONGO_URI") or \
-        f"mongodb://{os.getenv('MONGO_USER', 'admin')}:{os.getenv('MONGO_PASSWORD', 'strongpassword123')}@{os.getenv('MONGO_HOST')}:{os.getenv('MONGO_PORT', '27017')}/?authSource=admin"
-        self._MONGODB_DB = "chatbot_db"
-        self.KM_DB="documents_db"
-        self.USERS_DB="users_db"
+        self._MONGO_URI =settings.MONGODB_URI
+        self._MONGODB_DB =settings.MONGODB_DB
+        self.KM_DB=settings.MONGODB_KM_DB
+        self.USERS_DB=settings.MONGODB_USER_DB
+        
         try:
             self.client = MongoClient(self._MONGO_URI, serverSelectionTimeoutMS=3000)
             self.client.admin.command("ping")
@@ -26,6 +26,7 @@ class MongoStore:
         self.km_db=self.client[self.KM_DB]
         self.users_db=self.client[self.USERS_DB]
         
+        self.rag_logs = self.db["rag_logs"]
         self.sessions = self.db["sessions"]
         self.messages = self.db["chatmessages"]
         self.documents=self.km_db["documents"]
@@ -39,7 +40,7 @@ class MongoStore:
         client=get_client()
         content_preview=content.strip()[:200]
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  
+            model=settings.AZURE_DEPLOYMENT_NAME,  
             messages=[
                 {"role": "system", "content": "create a title in 2-3 words from the content"},
                 {"role": "user", "content": content_preview}
@@ -48,6 +49,7 @@ class MongoStore:
         )
         title=response.choices[0].message.content
         title = title.strip().strip('"').strip("'")
+        logger.info("Generated title: %s", title)
         return title
         
     def _create_index(self):        
@@ -55,6 +57,7 @@ class MongoStore:
         self.sessions.create_index([("user_id", 1), ("updated_at", DESCENDING)])
         self.sessions.create_index([("user_id", 1), ("message_count", DESCENDING)])
         self.messages.create_index([("session_id", 1), ("timestamp", 1)])
+        self.rag_logs.create_index([("session_id", 1), ("timestamp", 1)])
         
     def create_session(self, session_id: str, user_id: str):
         result = self.sessions.insert_one({
@@ -254,10 +257,54 @@ class MongoStore:
             "logged_in":result.get("logged_in")
         }
         return user_details
+
+    def save_rag_log(self, session_id, query, context, answer):
+        try:
+            self.rag_logs.insert_one({
+                "session_id": session_id,
+                "query": query,
+                "context": context,    
+                "answer": answer,         
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            logger.info(f"Saved RAG log for session_id: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to save RAG log: {e}")
     
-    
+    def get_average_metrics(self):
+        pipeline = [
+            {
+                "$group": {
+                    "_id": None,
+                    "avg_answer_relevance":  {"$avg": "$answer_relevance"},
+                    "avg_context_relevance": {"$avg": "$context_relevance"},
+                    "avg_groundedness":      {"$avg": "$groundedness"},
+                    "total_evaluations":     {"$sum": 1}
+                }
+            }
+        ]
+        
+        collection = self.db[settings.MONGODB_COLLECTION]
+        result = list(collection.aggregate(pipeline))
+        
+        if not result:
+            return {
+                "avg_answer_relevance":  None,
+                "avg_context_relevance": None,
+                "avg_groundedness":      None,
+                "total_evaluations":     0
+            }
+        
+        row = result[0]
+        return {
+            "avg_answer_relevance":  round(row["avg_answer_relevance"],  3) if row["avg_answer_relevance"]  is not None else None,
+            "avg_context_relevance": round(row["avg_context_relevance"], 3) if row["avg_context_relevance"] is not None else None,
+            "avg_groundedness":      round(row["avg_groundedness"],      3) if row["avg_groundedness"]      is not None else None,
+            "total_evaluations":     row["total_evaluations"]
+        }
         
             
+                
+            
         
-    
-    
+        

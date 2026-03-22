@@ -1,7 +1,14 @@
 import streamlit as st 
 import requests
+from config.settings import settings
+from PIL import Image
 
-API_BASE_URL = "http://fastapi:8001"
+API_BASE_URL = settings.API_BASE_URL
+
+knowledge_icon=Image.open("assets/learning-support.png")
+pdf_icon  = Image.open("assets/pdf.png")
+docx_icon = Image.open("assets/doc.png")
+file_icon = Image.open("assets/file.png")
 
 def get_documents_api():
     res = requests.get(f"{API_BASE_URL}/documents/get")
@@ -19,7 +26,7 @@ def delete_document_api(document_id):
 
 st.set_page_config(
     page_title="Knowledge Management",
-    page_icon="📚",
+    page_icon=knowledge_icon,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -95,13 +102,13 @@ with st.container(border=True,horizontal_alignment="center",vertical_alignment="
             file_type=document.get("document_type")
             docx_types=["docx","word","vnd.openxmlformats-officedocument.wordprocessingml.document"]
             if file_type == "pdf":
-                st.write(f"{file_type} 📕")
+                st.image(pdf_icon, width=24)
             elif file_type in docx_types:
                 if file_type == "vnd.openxmlformats-officedocument.wordprocessingml.document":
                     file_type="docx"
-                st.write(f"{file_type} 📘")
+                st.image(docx_icon, width=24)
             else :
-                st.write(f"{file_type} 📄")
+                st.image(file_icon, width=24)
         with col5:
             st.write(document.get("uploaded_by"))
         with col4:
@@ -114,7 +121,3 @@ with st.container(border=True,horizontal_alignment="center",vertical_alignment="
                 if response:
                     st.success("Document deleted successfully")
                     st.rerun()
-                    
-            
-        
-   

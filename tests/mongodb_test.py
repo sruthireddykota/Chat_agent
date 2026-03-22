@@ -24,16 +24,17 @@ class MongoStore:
         self.messages = self.db["chatmessages"]
         self.documents=self.km_db["documents"]
         self.users=self.users_db["users"]
-        self._create_index()
+        #self._create_index()
     
     
     def create_title(self, content):
         from azure_clients.title_azure_client import get_client
         
         client=get_client()
+        print("Generating title for content preview:", content.strip()[:200])
         content_preview=content.strip()[:200]
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  
+            model="gpt-4.1-mini",  
             messages=[
                 {"role": "system", "content": "create a title in 2-3 words from the content"},
                 {"role": "user", "content": content_preview}
@@ -263,5 +264,6 @@ data={
 # response=cl.get_user_details(email_id="17287178&email")
 # print(response)
 
-r=cl.useer_unique(user_data=data)
-print(r)
+# r=cl.useer_unique(user_data=data)
+# print(r)
+print(cl.create_title("What is the capital of France?"))

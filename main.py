@@ -1,11 +1,15 @@
 import streamlit as st
 import uuid
 import bcrypt
+from PIL import Image
 
+chatbot_icon=Image.open("assets/robot.png")
+knowledge_icon = Image.open("assets/learning-support.png")
+metrics_icon = Image.open("assets/metrics.png")
 
 st.set_page_config(
     page_title="Multi Agent Chatbot",
-    page_icon="",
+    page_icon=chatbot_icon,
     layout="wide",
     initial_sidebar_state="collapsed"
     )
@@ -99,7 +103,7 @@ if st.session_state.authenticated=='home':
     with st.empty().container(border=True):
         col1,col2 = st.columns([5,5])
         with col1:
-            st.image("login_page_logo.png")
+            st.image("assets/login_page_logo.png")
         with col2:
             st.header("Multi Agent Chatbot",text_alignment="center")
             st.write("")
@@ -133,6 +137,7 @@ elif st.session_state.authenticated=='landing':
             st.rerun()
         except Exception as e:
             st.error("Log out failed")
+
     st.markdown(
         """
         <style>
@@ -156,27 +161,33 @@ elif st.session_state.authenticated=='landing':
             user_logout()
             
     st.write("")
-    st.subheader("Select an Application")
-    st.write("")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         with st.container(border=True):
-            st.markdown("### 💬 Chatbot")
+            st.image(chatbot_icon, use_container_width=True)
             st.write("Interact with our intelligent multi-agent chatbot system")
             st.write("")
             if st.button("Launch Chatbot", key="launch_chatbot", use_container_width=True, type="primary"):
                 st.switch_page("pages/chatbot.py")
-    
+        
     with col2:
         with st.container(border=True):
-            st.markdown("### 📚 Knowledge Management")
+            st.image(knowledge_icon, use_container_width=True)
             st.write("Manage and organize your knowledge base")
             st.write("")
             if st.button("Launch Knowledge Management", key="launch_km", use_container_width=True, type="primary"):
                 st.switch_page("pages/knowledge_management.py")
-            
+
+    with col3:
+        with st.container(border=True):
+            st.image(metrics_icon, use_container_width=True)
+            st.write("Evaluate your RAG pipeline performance")
+            st.write("")
+            if st.button("Launch RAG Evaluation", key="launch_rag", use_container_width=True, type="primary"):
+                st.switch_page("pages/rag_evaluation.py")
+
             
         
         

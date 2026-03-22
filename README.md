@@ -250,5 +250,11 @@ Chat_agent/
 ├── docker-compose.yml
 ├── login page logo.png
 ├── main.py
+├── Dockerfile.chatapp
+├── Dockerfile.fastapi
+├── fastapi_chatapp.py
 └── requirements.txt
+└── LICENSE
+└── README.md
+
 ```

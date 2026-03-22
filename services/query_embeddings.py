@@ -1,5 +1,6 @@
 from openai import AzureOpenAI
-import os
+from config.settings import settings
+import os 
 
 def get_embedding_client():
     client=AzureOpenAI(
@@ -13,7 +14,7 @@ client=get_embedding_client()
 
 def query_embedding(query):
     response=client.embeddings.create(
-        model=os.getenv("EMBEDDING_MODEL"),
+        model=settings.EMBEDDING_MODEL,
         input=query
     )
     return response.data[0].embedding

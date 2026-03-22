@@ -76,3 +76,7 @@ def update_user_status(user_id: str, logged_in: bool):
 @app.get("/users/{email_id}")
 def get_user(email_id: str):
     return mongo.get_user_details(email_id)
+
+@app.get("/metrics/averages")
+def get_average_metrics():
+    return mongo.get_average_metrics()

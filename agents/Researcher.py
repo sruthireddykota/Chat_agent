@@ -4,7 +4,7 @@ import asyncio
 from typing import Dict
 import json
 from utils.logger import get_logger
-
+from config.settings import settings
 logger = get_logger()
 
 
@@ -15,7 +15,7 @@ class ResearcherAgent:
         self.client = get_client()
         self.mcp_client = MCPStreamableHTTPTool(
             name="MCP Tools",
-            url="http://mcp-server:8000/mcp",
+            url=settings.MCP_URL,
             allowed_tools=["brave_web_search"]
         )
 
@@ -46,7 +46,7 @@ class ResearcherAgent:
                 logger.info(f'[Researcher Agent] No Files Detected in Query')
 
                 store = lambda: RedisChatMessageStore(
-                    redis_url="redis://redis:6379",
+                    redis_url=settings.REDIS_URL,
                     thread_id=f"session_{session_id}",
                     max_messages=5
                 )

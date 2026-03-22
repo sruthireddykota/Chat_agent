@@ -144,7 +144,7 @@ def embed_search(query,limit):
         return results
     
 @mcp.tool()
-def rag_retrive(query:str)->str:
+def rag_retrive(query:str)->dict:
     """
     This tool takes a user query and returns top retrived chunks from the document database
 
@@ -152,22 +152,29 @@ def rag_retrive(query:str)->str:
         query (str): The query given by the user 
 
     Returns:
-        str : This returns top Retrived chunk information 
+        dict : This returns top Retrived chunk information 
     """
     try:
         response=embed_search(query=query,limit=6)
         final_response=''
+        chunks=[]
         for chunk in response:
             document_name=chunk.get("document_name")
             chunk_id=chunk.get("chunk_id")
             chunk_content=chunk.get("chunk_content")
             score=chunk.get("score")
-            
+            chunks.append(chunk_content)#for evaluation metrics
             chunk_data=f"Document name: {document_name}, Chunk_id: {chunk_id}, Score: {score}, Chunk_content: {chunk_content}\n\n"
             final_response +=chunk_data
-        return final_response
+        return {
+            'final_response':final_response,#rag agent
+            'chunks': chunks #evaluations metrics in list format
+        }
     except Exception as e:
-        return "No Documents Found"
+        return {                           
+            "final_response": f"No Documents Found, try again. Error: {e}",
+            "chunks": []
+        }
 
 @mcp.tool()
 def get_chat_history(session_id:str)->str:

@@ -7,6 +7,6 @@ def get_embedding_client():
     client=AzureOpenAI(
         api_key=os.getenv("EMBEDDING_API_KEY"),
         azure_endpoint=os.getenv("EMBEDDING_ENDPOINT"),
-        api_version="2024-02-15-preview"
+        api_version=os.getenv("OPENAI_API_VERSION")
     )
     return client

@@ -36,6 +36,7 @@ myvenv/
 .env.local
 .env.production
 secrets/
+.deepeval/
 
 #agents
 agents/Coder.py
@@ -74,6 +75,7 @@ htmlcov/
 .tox/
 nosetests.xml
 coverage.xml
+tests/
 
 # Jupyter
 .ipynb_checkpoints/

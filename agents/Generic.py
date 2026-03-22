@@ -2,6 +2,7 @@ from agent_framework import ChatAgent,ChatMessage, DataContent ,Role,ChatMessage
 from agent_framework.redis import RedisChatMessageStore
 import asyncio
 from utils.logger import get_logger
+from config.settings import settings
 
 logger=get_logger()
 
@@ -36,7 +37,7 @@ class Genericagent:
                 
                 store=lambda:RedisChatMessageStore(
                     thread_id=f"session_{session_id}",
-                    redis_url="redis://redis:6379",
+                    redis_url=settings.REDIS_URL,
                     max_messages=5
                 )
                 

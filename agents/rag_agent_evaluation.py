@@ -1,10 +1,11 @@
-from agent_framework import ChatAgent,MCPStreamableHTTPTool ,ChatMessage ,Role,DataContent
+from agent_framework import ChatAgent,MCPStreamableHTTPTool ,ChatMessage ,Role
 from azure_clients.azure_client import get_client
-import asyncio
-import json
 from utils.logger import get_logger
+import json
+from agent_framework.azure import AzureOpenAIChatClient
 from config.settings import settings
 
+    
 class RAG_agent:
     
     def __init__(self):
@@ -12,32 +13,16 @@ class RAG_agent:
         self.mcp_tool= MCPStreamableHTTPTool(
             name="mcp_tool",
             url=settings.MCP_URL)
+        
+        self.context=[]
 
     async def rag_agent(self,query,session_id):
         logger=get_logger()
-        
-        has_files = bool(query.files) if hasattr(query, 'files') else False
-          
-        if has_files:
-            logger.info(f'[RAG Agent] Detected Files in Query')
-            file_data=query.files[0]
-            
-            file_type=file_data.type
-            
-            if len(file_data)>0:
-                message=ChatMessage(
-                    role=Role.USER,
-                    text=query.text,
-                    contents=[DataContent(data=file_data.read(),media_type=file_type)]
-                    )
-        else:
-            logger.info(f'[RAG Agent] No Files Detected in Query')
-            
-            message=ChatMessage(
-                role=Role.USER,
-                text=query.text
-            )
-            
+
+        message=ChatMessage(
+            role=Role.USER,
+            text=query
+        )
         
         instructions="""You are a Retrieval Augmented Agent, your job is to provide accurate, citation-backed answers by retrieving relevant documents from the knowledge base 
 
@@ -112,7 +97,8 @@ Querying & Retrieval — Step-by-step
                 json_result = json.loads(result)
 
                 agent_content=json_result["final_response"]
-                
+
+                self.context.append(json_result["chunks"] )
                 logger.info(f'[Rag retreival] rag_retrieve successful: {len(agent_content)}')
                 return agent_content
             
@@ -140,25 +126,17 @@ Querying & Retrieval — Step-by-step
                         instructions=instructions,
                         tools=[rag_retreival,get_history])
         
-        logger.info(f'[RAG AGENT] query received: {query.text}')
+        logger.info(f'[RAG AGENT] query received: {query}')
         
+        response_text=""
+
         async for event in agent.run_stream(message):
             if hasattr(event,'text') and event.text:
-                yield event.text
-              
-def rag_executor(query,session_id):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    logger=get_logger()
-    logger.info(f'[RAG Executor] query started: {query.text, session_id}')
-    async_gen = RAG_agent().rag_agent(query,session_id)
-    try:
-        while True:
-            chunk = loop.run_until_complete(async_gen.__anext__())
-            yield chunk
-    except StopAsyncIteration:
-        pass
-    finally:
-        logger.info(f'[RAG Executor] query completed: {query.text, session_id}')
-        loop.close()
-            
+                response_text+=event.text
+    
+        return {
+            "query": query,
+            "response": response_text,
+            "context": self.context
+        }
+

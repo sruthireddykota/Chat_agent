@@ -16,6 +16,7 @@ COPY ./Mongodb/ /app/Mongodb/
 COPY ./fastapi_chatapp.py /app/fastapi_chatapp.py
 COPY ./utils/ /app/utils/
 COPY ./azure_clients/title_azure_client.py /app/azure_clients/
+COPY ./config/ /app/config/
 
 EXPOSE 8001
 

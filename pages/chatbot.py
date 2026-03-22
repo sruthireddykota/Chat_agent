@@ -4,8 +4,12 @@ import uuid
 from datetime import datetime
 import base64
 import requests
+from config.settings import settings
+from PIL import Image
 
-API_BASE_URL = "http://fastapi:8001"
+chatbot_icon=Image.open("assets/robot.png")
+
+API_BASE_URL = settings.API_BASE_URL
 
 
 def create_session_api(session_id, user_id):
@@ -44,7 +48,7 @@ def delete_session_api(session_id):
 def streamlit_executor():
     st.set_page_config(
         page_title="ChatAgent",
-        page_icon="💬",
+        page_icon=chatbot_icon,
         layout="wide",
         initial_sidebar_state="collapsed"
     )
@@ -235,4 +239,3 @@ def streamlit_executor():
 streamlit_executor()
     
     
-        

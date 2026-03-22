@@ -27,11 +27,17 @@ async def web_search(query,freshness)->Dict:
             await mcp_client.close()
             
             
-async def retrive(query):
+async def retrieve(query):
     await mcp_client.connect()
     try:
-        response= await mcp_client.call_tool("rag_retrive",query=query)
-        return response[0].text
+        response = await mcp_client.call_tool("rag_retrive", query=query)
+        result = response[0].text
+        json_result = json.loads(result)
+
+        agent_content=json_result["final_response"]
+
+        return agent_content
+            
     finally:
         await mcp_client.close()
         
@@ -43,5 +49,5 @@ async def history_retrive(session_id):
     finally:
         await mcp_client.close()
 
-result=asyncio.run(history_retrive("771aaf5c-753a-4321-bd1e-a6e0c6fecbb9"))
+result=asyncio.run(retrieve(" What are the key rules governing pit stops in Formula 1?"))
 print(result)

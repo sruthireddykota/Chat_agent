@@ -1,10 +1,10 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance,PointStruct,Filter,FieldCondition,MatchValue
 import uuid
-import os
+from config.settings import settings
 class Qdrantservice:
     
-    def __init__(self, host=os.getenv("QDRANT_HOST"), port=os.getenv("QDRANT_PORT")):
+    def __init__(self, host=settings.QDRANT_HOST, port=settings.QDRANT_PORT):
         self.client = QdrantClient(host=host, port=port)
     
     def create_collection(self,collection):
