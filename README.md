@@ -2,7 +2,7 @@
 
 A modular, multi-agent AI chatbot built with Streamlit and FastAPI, featuring specialized agents for general conversation, code analysis, document retrieval (RAG), and real-time web research. Supports multi-modal input, streaming responses, Redis-backed conversation history, and a full document ingestion pipeline backed by Qdrant and MongoDB.
 
-![View Presentation](https://gamma.app/docs/Multi-Agent-Chatbot-System-86qc53lupy60giu)
+[view presentation](https://gamma.app/docs/Multi-Agent-Chatbot-System-86qc53lupy60giu)
 
 ---
 
@@ -235,13 +235,13 @@ Exposes three tools used by agents:
 - Redis
 - MongoDB
 - Qdrant
-- Node.js (for document parsing)
+- Docling serve
 - Brave Search API key (for Researcher agent)
 
 ### Installation
 
 ```bash
-git clone https://github.com/sruthireddykota/Chat_agent.git
+git clone https://github.com/your-org/Chat_agent.git
 cd Chat_agent
 
 python -m venv myvenv
