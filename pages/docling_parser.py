@@ -225,7 +225,7 @@ with tab1:
                             url="http://docling-serve:5001/v1/convert/file",
                             data=data,
                             files=files,
-                            timeout=600,
+                            timeout=3600,
                         )
                         
                         if response.status_code==200:
@@ -329,7 +329,7 @@ with tab2:
                             url="http://docling-serve:5001/v1/convert/source",
                             json=payload,
                             headers={'Content-Type': 'application/json'},
-                            timeout=600
+                            timeout=3600
                         )
                         if response.status_code==200:
                             result=response.json()

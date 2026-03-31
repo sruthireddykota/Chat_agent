@@ -128,4 +128,4 @@ if st.session_state.file_loaded and st.session_state.df is not None:
             cols = st.columns(len(available))
             for col, metric in zip(cols, available):
                 avg = st.session_state.scores_df[metric].mean()
-                col.metric(metric, f"{avg:.3f}" if pd.notna(avg) else "N/A")
+                col.metric(metric, f"{avg:.3f}" if pd.notna(avg) else "N/A") 

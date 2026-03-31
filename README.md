@@ -2,7 +2,7 @@
 
 A modular, multi-agent AI chatbot built with Streamlit and FastAPI, featuring specialized agents for general conversation, code analysis, document retrieval (RAG), and real-time web research. Supports multi-modal input, streaming responses, Redis-backed conversation history, and a full document ingestion pipeline backed by Qdrant and MongoDB.
 
-[view presentation](https://gamma.app/docs/Multi-Agent-Chatbot-System-86qc53lupy60giu)
+[view presentation](https://multi-agent-chatbot-syst-70gddpc.gamma.site/)
 
 ---
 
@@ -297,6 +297,12 @@ Core dependencies from `requirements.txt`:
 - `qdrant-client` — vector store
 - `asyncio` — async agent execution
 
+---
+# Presentation link
+
+[view presentation](https://docs.google.com/presentation/d/1XpXlxz_L5HKgczQPkYmbAbu8TwiV4KBM/edit?usp=sharing&ouid=102516658501058113497&rtpof=true&sd=true)
+
+[view presentation](https://multi-agent-chatbot-syst-70gddpc.gamma.site/)
 ---
 
 ## License

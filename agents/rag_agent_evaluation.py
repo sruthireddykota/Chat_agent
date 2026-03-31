@@ -13,11 +13,10 @@ class RAG_agent:
         self.mcp_tool= MCPStreamableHTTPTool(
             name="mcp_tool",
             url=settings.MCP_URL)
-        
-        self.context=[]
 
     async def rag_agent(self,query,session_id):
         logger=get_logger()
+        query_context=[]
 
         message=ChatMessage(
             role=Role.USER,
@@ -97,8 +96,8 @@ Querying & Retrieval — Step-by-step
                 json_result = json.loads(result)
 
                 agent_content=json_result["final_response"]
+                query_context.append(json_result["chunks"]) 
 
-                self.context.append(json_result["chunks"] )
                 logger.info(f'[Rag retreival] rag_retrieve successful: {len(agent_content)}')
                 return agent_content
             
@@ -137,6 +136,6 @@ Querying & Retrieval — Step-by-step
         return {
             "query": query,
             "response": response_text,
-            "context": self.context
+            "context": query_context
         }
 
