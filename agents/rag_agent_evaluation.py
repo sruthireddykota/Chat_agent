@@ -1,8 +1,7 @@
-from agent_framework import ChatAgent,MCPStreamableHTTPTool ,ChatMessage ,Role
+from agent_framework import Agent, Message, Content, MCPStreamableHTTPTool
 from azure_clients.azure_client import get_client
 from utils.logger import get_logger
 import json
-from agent_framework.azure import AzureOpenAIChatClient
 from config.settings import settings
 
     
@@ -18,9 +17,11 @@ class RAG_agent:
         logger=get_logger()
         query_context=[]
 
-        message=ChatMessage(
-            role=Role.USER,
-            text=query
+        message=Message(
+            role='user',
+            contents=[
+                Content.from_text(query)
+            ]
         )
         
         instructions="""You are a Retrieval Augmented Agent, your job is to provide accurate, citation-backed answers by retrieving relevant documents from the knowledge base 
@@ -121,15 +122,19 @@ Querying & Retrieval — Step-by-step
                 await self.mcp_tool.close()
             
                   
-        agent=ChatAgent(chat_client=self.client,name="RAG AGENT",
-                        instructions=instructions,
-                        tools=[rag_retreival,get_history])
+        agent=Agent(client=self.client,
+                    name="RAG AGENT",
+                    instructions=instructions,
+                    tools=[rag_retreival,get_history],
+                    default_options={
+                        "temperature" : 0.2
+                    })
         
         logger.info(f'[RAG AGENT] query received: {query}')
         
         response_text=""
 
-        async for event in agent.run_stream(message):
+        async for event in agent.run(message,stream=True):
             if hasattr(event,'text') and event.text:
                 response_text+=event.text
     

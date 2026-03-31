@@ -1,4 +1,4 @@
-from agent_framework import ChatAgent,MCPStreamableHTTPTool ,ChatMessage ,Role,DataContent
+from agent_framework import Agent, Message, Content, MCPStreamableHTTPTool 
 from azure_clients.azure_client import get_client
 import asyncio
 import json
@@ -25,17 +25,21 @@ class RAG_agent:
             file_type=file_data.type
             
             if len(file_data)>0:
-                message=ChatMessage(
-                    role=Role.USER,
-                    text=query.text,
-                    contents=[DataContent(data=file_data.read(),media_type=file_type)]
-                    )
+                message=Message(
+                    role='user',
+                    contents=[
+                        Content.from_text(query.text),
+                        Content.from_data(data=file_data.read(), media_type=file_type)
+                    ]
+                )
         else:
             logger.info(f'[RAG Agent] No Files Detected in Query')
             
-            message=ChatMessage(
-                role=Role.USER,
-                text=query.text
+            message=Message(
+                role='user',
+                contents=[
+                    Content.from_text(query.text)
+                ]
             )
             
         
@@ -136,13 +140,17 @@ Querying & Retrieval — Step-by-step
                 await self.mcp_tool.close()
             
                   
-        agent=ChatAgent(chat_client=self.client,name="RAG AGENT",
-                        instructions=instructions,
-                        tools=[rag_retreival,get_history])
+        agent=Agent(client=self.client,
+                    name="RAG AGENT",
+                    instructions=instructions,
+                    tools=[rag_retreival,get_history],
+                    default_options={
+                        "temperature" : 0.2
+                    })
         
         logger.info(f'[RAG AGENT] query received: {query.text}')
         
-        async for event in agent.run_stream(message):
+        async for event in agent.run(message,stream=True):
             if hasattr(event,'text') and event.text:
                 yield event.text
               
