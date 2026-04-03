@@ -49,5 +49,7 @@ async def history_retrive(session_id):
     finally:
         await mcp_client.close()
 
-result=asyncio.run(retrieve(" What are the key rules governing pit stops in Formula 1?"))
+# result=asyncio.run(retrieve(" What are the key rules governing pit stops in Formula 1?"))
+# print(result)
+result=asyncio.run(history_retrive("6d9538c7-eff8-4426-89f1-7be4f808a59c"))
 print(result)

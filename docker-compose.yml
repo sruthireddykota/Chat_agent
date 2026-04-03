@@ -162,6 +162,8 @@ services:
     env_file:
       - .env
     restart: unless-stopped
+    volumes:
+      - ./agent_data:/workspace 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
       interval: 30s
@@ -173,6 +175,7 @@ volumes:
   mongodb_data:
   hf_cache:
   ocr_cache:
+  agent_data:
 
 networks:
   agent_framework:

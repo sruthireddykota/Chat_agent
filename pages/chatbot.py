@@ -131,7 +131,21 @@ def streamlit_executor():
         
         agent_selection=st.pills("Select Agent",["Generic","Coder","Researcher","RAG"],
                                  default="Generic",selection_mode="single")
+        
+        prev_agent_key = "prev_selected_agent"
+        if st.session_state.get(prev_agent_key) != agent_selection:
+            # Wipe all fb_ keys so stale previews never bleed through
+            for k in list(st.session_state.keys()):
+                if k.startswith("fb_"):
+                    del st.session_state[k]
+            st.session_state[prev_agent_key] = agent_selection
+
         st.session_state.selected_agent = agent_selection
+
+        if agent_selection == "Coder":
+            st.markdown("---")
+            if st.button("Workspace Explorer", use_container_width=True):
+                st.switch_page("pages/workspace_explorer.py")
         
         #st.markdown("---")
         col1,col2=st.columns([4,4])
@@ -225,17 +239,31 @@ def streamlit_executor():
             except Exception as e:
                 st.markdown(f"Unable to execute the query rightnow!, try again later,{e}")
                 output=f"Unable to execute the query rightnow!, try again later,{e}"
-                
+        
+        if st.session_state.selected_agent == "Coder":
+            st.session_state[f"coder_done_{st.session_state.current_session}"] = True
+            # Reset file selection so browser starts fresh after each response
+            fb_sel_key = f"fb_sel_{st.session_state.current_session}"
+            st.session_state[fb_sel_key] = None
+
         message={"session_id":current_sessionID,
                  "role":"assistant",
                  "content":output,
                  "timestamp":datetime.utcnow().isoformat(),
                  "agent_name":st.session_state.selected_agent,
                  "user_id":user_id}
-
         save_message(message=message)
         
         st.rerun()
+    coder_done_key = f"coder_done_{st.session_state.current_session}"
+    if (st.session_state.get("selected_agent") == "Coder"
+        and st.session_state.get(coder_done_key, False)):
+
+        from utils.file_browser import render_file_browser
+        render_file_browser(
+            workspace=f"{settings.CODER_BASE_PATH}/{st.session_state.current_session}",
+            session_id=current_session,
+        )
 streamlit_executor()
     
     

@@ -96,3 +96,7 @@ docker-compose.override.yml
 # Misc
 *.bak
 *.tmp
+
+#Coder Agent files
+workspace/
+agent_data/

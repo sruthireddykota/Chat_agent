@@ -70,3 +70,6 @@ qdrant_storage/
 # Docker
 docker-compose.override.yml
 
+#Coder Agent files
+workspace/
+agent_data/
