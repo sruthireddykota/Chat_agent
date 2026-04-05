@@ -30,6 +30,7 @@ env/
 venv/
 ENV/
 myvenv/
+agentvenv/
 
 # Logs
 logs/
@@ -73,3 +74,7 @@ docker-compose.override.yml
 #Coder Agent files
 workspace/
 agent_data/
+
+tests/
+
+node_modules

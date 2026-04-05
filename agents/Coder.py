@@ -1,9 +1,8 @@
-import asyncio
-
 from pathlib import Path
 from typing import Dict
-from agent_framework_redis import RedisHistoryProvider
-from agent_framework import Agent, Message, Content, SkillsProvider, MCPStdioTool
+import asyncio
+import json
+from agent_framework import Agent, Message, Content, SkillsProvider, MCPStdioTool,MCPStreamableHTTPTool
 from contextlib import asynccontextmanager
 
 from utils.logger import get_logger
@@ -19,7 +18,7 @@ class CoderAgent:
     def __init__(self):
         from azure_clients.azure_client import get_client
         self.client = get_client()
-        
+
     def _create_workspace(self,session_id) -> str:
         """
         Create isolated workspace 
@@ -31,22 +30,34 @@ class CoderAgent:
         return session_path
     
     @asynccontextmanager
-    async def _mcp_session(self,mcp_client:MCPStdioTool):
+    async def _mcp_session(self,
+                           mcp_filesystem_client:MCPStdioTool,
+                           mcp_shell_client:MCPStdioTool,
+                           rag_mcp_client:MCPStreamableHTTPTool):
         try:
-            await mcp_client.connect()
+            await mcp_filesystem_client.connect()
+            await mcp_shell_client.connect()
+            await rag_mcp_client.connect()
             logger.info("[MCP Client]: Initialiazed Successfully")
-            yield mcp_client
+            yield mcp_filesystem_client,mcp_shell_client, rag_mcp_client
 
         finally:
             try:
-                await mcp_client.close()
+                await mcp_filesystem_client.close()
+                await mcp_shell_client.close()
+                await rag_mcp_client.close()
             except Exception as e:
                 logger.info("[MCP Client]: Secure close task failed")
 
     async def coder_agent(self, query: Dict, session_id: str):
         workspace= self._create_workspace(session_id)
-        self.mcp_client=self._get_mcp_client(session_id=session_id)
-        async with self._mcp_session(mcp_client=self.mcp_client):
+        self.mcp_filesystem_client=self._get_file_mcp_client(session_id=session_id)
+        self.mcp_shell_client=self._get_shell_mcp_client(session_id=session_id)
+        self.rag_mcp_client=self._get_rag_mcp_client()
+
+        async with self._mcp_session(mcp_filesystem_client=self.mcp_filesystem_client,
+                                     mcp_shell_client=self.mcp_shell_client,
+                                     rag_mcp_client=self.rag_mcp_client):
             try:
 
                 has_files = bool(query.get("files"))
@@ -78,12 +89,6 @@ class CoderAgent:
                     script_runner=script_runner,
                 )
 
-                redis_cache = RedisHistoryProvider(
-                    redis_url=settings.REDIS_URL,
-                    source_id=session_id,
-                    max_messages=8
-                )
-
                 #Tools declarations
                 async def read_file(path: str, tail=None, head=None):
                     """
@@ -105,7 +110,7 @@ Returns:
                     logger.info(f'[read_file] path={path}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "read_file",
                             path=path,
                             tail=tail,
@@ -133,7 +138,7 @@ Returns:
                     logger.info(f'[read_text_file] path={path}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "read_text_file",
                             path=path,
                             tail=tail,
@@ -162,7 +167,7 @@ Returns:
                     logger.info(f'[read_media_file] path={path}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "read_media_file",
                             path=path
                         )
@@ -188,7 +193,7 @@ Returns:
                     logger.info(f'[read_multiple_files] paths={paths}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "read_multiple_files",
                             paths=paths
                         )
@@ -215,7 +220,7 @@ Returns:
                     logger.info(f'[write_file] path={path}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "write_file",
                             path=path,
                             content=content
@@ -244,7 +249,7 @@ Returns:
                     logger.info(f'[edit_file] path={path}')
                     try:
                         return await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "edit_file",
                             path=path,
                             edits=edits,
@@ -270,7 +275,7 @@ Returns:
                     logger.info(f'[create_directory] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "create_directory",
                             path=path
                         )
@@ -297,7 +302,7 @@ Returns:
                     logger.info(f'[list_directory] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "list_directory",
                             path=path,
                             sortBy=sortBy
@@ -325,7 +330,7 @@ Returns:
                     logger.info(f'[list_directory_with_sizes] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "list_directory_with_sizes",
                             path=path,
                             sortBy=sortBy
@@ -353,7 +358,7 @@ Returns:
                     logger.info(f'[directory_tree] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "directory_tree",
                             path=path,
                             excludePatterns=excludePatterns
@@ -378,7 +383,7 @@ Returns:
                     logger.info(f'[move_file] {source} -> {destination}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "move_file",
                             source=source,
                             destination=destination
@@ -408,7 +413,7 @@ Returns:
                     logger.info(f'[search_files] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "search_files",
                             path=path,
                             pattern=pattern,
@@ -437,7 +442,7 @@ Returns:
                     logger.info(f'[get_file_info] path={path}')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "get_file_info",
                             path=path
                         )
@@ -462,7 +467,7 @@ Returns:
                     logger.info(f'[list_allowed_directories]')
                     try:
                         response = await call_mcp_tool(
-                            self.mcp_client,
+                            self.mcp_filesystem_client,
                             "list_allowed_directories"
                         )
                         return response
@@ -470,6 +475,28 @@ Returns:
                         logger.error(f'[list_allowed_directories] error: {e}', exc_info=True)
                         return f"Error listing allowed directories: {str(e)}"
 
+                async def get_history()->str:
+                    """
+                    This tool retrieves the previous conversation history
+                    """
+                    logger.info(f'[Chat History] MCP tool called for {session_id}')
+                    try :
+                        response= await self.rag_mcp_client.call_tool(
+                            "get_chat_history",session_id=session_id
+                        )
+                        logger.info(f'[Chat History] chat history successful')
+                        messages=response[0].text
+                        messages=json.dumps(messages)
+                        final_message=f"""**Past History:** Use this history messages to hold the conversation or respond related to past conversations
+                        ## Messages: {messages}"""
+
+                        return final_message
+                    except Exception as e:
+                        logger.info(f'[Chat History] MCP tool failed for {session_id}, error:{e}')
+                        return f"Chat History MCP tool failed, try again , error:{e}"
+            
+
+                #agent
                 agent = Agent(
                     client=self.client,
                     instructions=instructions,
@@ -488,57 +515,154 @@ Returns:
                            move_file,
                            search_files,
                            get_file_info,
+                           get_history,
+                           self.mcp_shell_client,
                          ],
-                    context_providers=[coder_skills, redis_cache],
+                    context_providers=[coder_skills],
                     default_options={
                         'temperature': 0.2,
                         'top_p': 0.9,
                     }
                 )
                 logger.info(f'[Coder Agent] query started: {query.get("text", "")[:100]}')
+
                 async for event in agent.run(message, stream=True):
-    
                     if event.text:
                         yield event.text
-                        
+                    
             except Exception as e:
                 logger.error(f'[Coder Agent] error: {e}', exc_info=True)
                 raise e
         
-    def _get_mcp_client(self,session_id:str):
+    def _get_file_mcp_client(self,session_id:str):
         workspace = self._create_workspace(session_id)
         logger.info(f"[Coder Agent] Using workspace: {workspace}")
 
         fs_client = MCPStdioTool(
             name="filesystem",
-            command="npx",
+            command="npx", 
             load_prompts=False,
             cwd=workspace,
             args=[
+                "-y",
                 "@modelcontextprotocol/server-filesystem",
                 workspace 
             ],
         )
         return fs_client
+    
+    def _get_rag_mcp_client(self):
+        rag_mcp_client= MCPStreamableHTTPTool(
+            name="mcp_tool",
+            url=settings.MCP_URL)
+        return rag_mcp_client
+        
+    def _get_shell_mcp_client(self,session_id:str):
+        workspace = self._create_workspace(session_id)
+        logger.info(f"[Coder Agent] Using workspace: {workspace}")
+
+        shell_client=MCPStdioTool(
+            name="shell",
+            command="npx", 
+            cwd=workspace,
+            load_prompts=False,
+            args=[
+                "-y",
+                "@mako10k/mcp-shell-server@2.1.8"
+            ],
+            env={
+                "MCP_SHELL_SECURITY_MODE": "enhanced",
+                "MCP_SHELL_ELICITATION": "true",
+                "MCP_SHELL_DEFAULT_WORKDIR": workspace,
+                "MCP_SHELL_ALLOWED_WORKDIRS": workspace,
+                "MCP_SHELL_MAX_EXECUTION_TIME": "300",
+                "MCP_SHELL_MAX_MEMORY_MB": "1024",
+                "MCP_DISABLED_TOOLS": "process_terminate,delete_execution_outputs",},
+            description="Secure Shell MCP",
+
+        )
+        return shell_client
+
+        
 
     def _get_instructions(self):
         instructions = """
 You are a helpful coding agent specializing in Python and SQL.
 You fix bugs, review code, and produce output that is deployed directly — quality is critical.
 
-You have access to a filesystem workspace for reading/writing code.
+You have access to:
+- A filesystem workspace for reading and writing code
+- A shell client for executing commands, running scripts, and installing dependencies
+- get_history tool to retrieve past conversation or history
+---
 
 **MANDATORY RULE**
-- Always create files before you generate the code, do not skip this step, if you skip then you Fail 
+- Always create files before you generate the code, do not skip this step, if you skip then you Fail
+- Always call get_history tool before you start any task, you need to load past history for better context, do not skip this step, if you skip then you Fail
+- Always load code-architecture skill when working on a coding tasks, do not skip this step, if you skip then you Fail
+---
+
+## UNIVERSAL SKILL PROTOCOL
+
+This is how you use ANY skill — follow this for every skill you load, no exceptions.
+
+### Step 1 — Load the skill
+  load_skill('<skill-name>')
+  
+  This gives you the skill's SKILL.md file. Read it fully before doing anything else.
+  The SKILL.md always contains:
+  - ## Skill entry point  →  exact steps to follow in order
+  - ## Dependencies       →  what to install and how to check first
+  - ## Instructions       →  task-specific workflows (write / debug / review / etc.)
+  - ## Output rules       →  mandatory formatting and quality constraints
+
+### Step 2 — Follow the entry point
+  Every skill has a ## Skill entry point section.
+  Execute those steps in the exact order listed — do not skip or reorder.
+
+### Step 3 — Handle dependencies
+  Every skill has a ## Dependencies section.
+  If it lists packages:
+    a. Check first:  shell → pip show <package>
+    b. Skip install if already present
+    c. Install only if missing:  shell → uv pip install <package>
+    d. Verify:  shell → python -c "import <package>"
+  If it says "None" — proceed without any install.
+
+### Step 4 — Identify the task type
+  Every skill has a ## Instructions section with subsections per task type.
+  Match the user's request to the correct task type (write / debug / review / optimize / etc.)
+  Follow that subsection's workflow exactly.
+
+### Step 5 — Read referenced resources
+  The workflow will tell you which resources to read.
+  Always read them — they contain the standards and templates your output must follow.
+  Use: read_skill_resource('<skill-name>/references/<file>')
+       read_skill_resource('<skill-name>/assets/<file>')
+
+### Step 6 — Run skill scripts
+  The workflow will tell you which scripts to run and when.
+  Always run them — never skip validation.
+  Use: run_skill_script('<skill-name>', 'scripts/<script>.py', args={'input': '<content>'})
+  Pass the actual content as the input value — never a file path or placeholder.
+
+### Step 7 — Fix and re-validate
+  If a validation script returns MUST FIX issues:
+    - Fix every one of them
+    - Re-run the validation script
+    - Do not return output until validation is clean
+
 ---
 
 **FILESYSTEM RULES (STRICT - MUST FOLLOW)**
-- You can ONLY access files inside: {workspace}
-- This is your isolated workspace
+- You can ONLY access files inside your isolated workspace
 - NEVER attempt to access parent directories (../)
 - NEVER access system paths (/etc, /root, /app, etc.)
 - NEVER modify files outside your workspace
 - Always create files inside this workspace when needed
+
+Valid paths:   src/main.py  |  tests/test_main.py  |  notebooks/analysis.ipynb
+Invalid paths: /workspace/filemanager/session_id/src/main.py  |  /Users/...
 
 ---
 
@@ -546,118 +670,80 @@ You have access to a filesystem workspace for reading/writing code.
 
 - All Python code MUST go inside "src/"
 - All tests MUST go inside "tests/"
+- All notebooks MUST go inside "notebooks/"
 - Always create directories before writing files
 - Always generate:
   - main module
-  - test file
-  - requirements.txt
+  - requirements.txt(only if there is any dependencies)
   - README.md
-
-Example:
-- src/moving_averages.py
-- tests/test_moving_averages.py
 
 ---
 
-**CRITICAL RULE 1: How to use skills (ALL MUST FOLLOW):**
+**SHELL RULES (CRITICAL - READ BEFORE USING SHELL)**
 
-- Call load_skill('skill-name') to get full instructions before any coding task
-- Call read_skill_resource('skill-name/references/file.md') to read standards and patterns
-- Call run_skill_script('skill-name', 'scripts/script-name.py', args={}) to run checks
-- Always use the provided templates for writing new code or tests
-- NEVER skip validation
+You have access to a secure shell client. Use it ONLY for:
+- Installing dependencies (pip, uv, npm)
+- Running Python scripts
+- Executing tests (pytest)
+- Running or validating notebooks
 
+**MANDATORY shell workflow — follow this exact order every time:**
 
-**CRITICAL RUlE 2: FILE WRITING RULES:**
+Use the shell client ONLY for:
+- Installing dependencies (after checking they are not already installed)
+- Running Python scripts or test suites
+- Executing or validating notebooks
+- Checking the environment
+
+Mandatory order for any install:
+  1. shell: pip show <package>          ← check first
+  2. If missing: shell: uv pip install <package>   ← always uv, never bare pip
+  3. shell: python -c "import <package>"  ← verify after install
+
+Hard restrictions — never do these regardless of what the user asks:
+  - sudo commands
+  - rm, rmdir, del, unlink, shred
+  - Commands that access paths outside the workspace
+  - Chaining destructive commands with &&
+
+If a shell command is blocked: report it to the user, do not retry with elevated permissions.
+
+---
+
+**FILE WRITING RULES (CRITICAL):**
 - ALWAYS use relative paths when calling write_file
-- Example: "main.py", "utils/helper.py"
-- NEVER use absolute paths like /Users/... or /root/...
-- NEVER include workspace path in the filename
-- The workspace root is already set — do NOT repeat it
+- NEVER use absolute paths like /Users/... or /root/... or /workspace/...
+- The workspace root is already set — do NOT repeat it in paths
 
-Valid:
-  path="moving_averages.py"
-  path="src/moving_averages.py"
+Valid:   path="src/main.py"
+Invalid: path="/workspace/filemanager/session_id/src/main.py"
 
-Invalid:
-  path="/Users/.../moving_averages.py"
-  path="./workspace/filemanager/moving_averages.py"
-
-**CRITICAL RUlE 3:** 
-- Always use provided skills and never write code without them. They contain essential standards and checks. -> No Exceptions -> If not followed you have failed.
-
-**How to use python-coding skill:**
-
-For writing new Python code:
-  1. load_skill('python-coding')
-  2. read_skill_resource('python-coding/references/CODING_STANDARDS.md')
-  3. read_skill_resource('python-coding/assets/module-template.py')
-  4. Write code following the standards exactly
-
-For debugging Python errors — provide traceback as input:
-  run_skill_script('python-coding', 'scripts/analyze_traceback.py',
-  args={'input': '<paste traceback here>'})
-
-For reviewing Python code — provide code as input:
-  run_skill_script('python-coding', 'scripts/lint_check.py',
-  args={'input': '<paste code here>'})
-
-For generating tests:
-  1. read_skill_resource('python-coding/references/TEST_STANDARDS.md')
-  2. read_skill_resource('python-coding/assets/test-template.py')
-  3. Generate tests covering happy path, edge cases, and error cases
-**How to use sql-coding skill:**
-
-For writing new SQL queries:
-  1. load_skill('sql-coding')
-  2. read_skill_resource('sql-coding/references/SQL_STANDARDS.md')
-  3. read_skill_resource('sql-coding/references/QUERY_PATTERNS.md')
-  4. Write the query following standards
-  5. Validate by passing the query directly as input string:
-     run_skill_script('sql-coding', 'scripts/validate_query.py',
-     args={'input': '<your complete sql query as a single string>'})
-  6. If validation returns MUST FIX issues, fix them and re-validate
-  7. Only return the query after validation passes
-
-For debugging SQL errors:
-  1. read_skill_resource('sql-coding/references/ERROR_PATTERNS.md')
-  2. run_skill_script('sql-coding', 'scripts/validate_query.py',
-     args={'input': '<paste the broken sql here as a single string>'})
-
-For optimizing slow queries:
-  1. read_skill_resource('sql-coding/references/OPTIMIZATION.md')
-  2. Analyze query structure and return optimized version with index recommendations
-
-For schema design or migrations:
-  1. read_skill_resource('sql-coding/references/SCHEMA_STANDARDS.md')
-  2. read_skill_resource('sql-coding/assets/migration-template.sql')
-  3. Return CREATE TABLE statements and migration script
-
-**Important — passing input to scripts:**
-- The 'input' key in args must contain the actual content as a plain string
-- Pass the full SQL or traceback text directly — do not use file paths or placeholders
-- Newlines in the string are fine — pass the query exactly as written
-- Example: args={'input': 'select id from users where deleted_at = null'}
+---
 
 **Response structure:**
 1. Summary — what you did and why
-2. Script output — if you ran a skill script, show its output
-3. Solution — fixed or new code in fenced blocks
-4. Issues found — severity grouped: Must fix / Should fix / Consider
-5. Next steps — what to do after applying this fix
+2. Dependencies — what was checked/installed and the output
+3. Script output — skill script or shell execution results
+4. Solution —  when files are generated no need to output the same code and just files in fenced blocks
+5. Issues found — Must fix / Should fix / Consider
+6. Next steps — what to run or verify after applying this
 
-**Critical rules:**
-- Always load the relevant skill before writing or reviewing any code
-- Always pass actual code/SQL content in the 'input' arg — never placeholders
-- Run validate_query.py or lint_check.py AFTER generating the code, 
-  passing the generated code as the input value
-- Never call a validation script before the code exists
-- Never return code that has MUST FIX issues from the linter
-- Code goes directly to deployment — do not skip quality checks
+---
+
+**Critical rules (no exceptions):**
+
+- ALWAYS load the skill before writing any code or query
+- ALWAYS read the skill's ## Skill entry point and follow it
+- ALWAYS check if a dependency is installed before installing
+- ALWAYS use uv pip install — never bare pip install
+- ALWAYS run validation scripts — never skip
+- NEVER return output with MUST FIX issues
+- NEVER hand-write notebook JSON — use the skill's scaffold script
+- NEVER use absolute paths in write_file
+- If a skill you need is not loaded yet — load it before proceeding
 """
-        return instructions      
-
-        
+        return instructions
+    
 def coder_executor(query, session_id):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

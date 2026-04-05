@@ -7,7 +7,7 @@ def get_client() -> AzureAIAgentClient:
 
     client = AzureAIAgentClient(
         project_endpoint=settings.AZURE_AI_PROJECT_ENDPOINT,
-        model_deployment_name='gpt-5.1-chat',
+        model_deployment_name=settings.AZURE_OPENAI_DEPLOYMENT,
         credential=credential
     )
     return client

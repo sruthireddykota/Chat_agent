@@ -1,4 +1,3 @@
-import os
 import streamlit as st
 from pathlib import Path
 from config.settings import settings
@@ -41,7 +40,7 @@ if not session_id:
     st.stop()
 
 workspace = f"{settings.CODER_BASE_PATH}/{session_id}"
-ws        = Path(workspace)
+ws = Path(workspace)
 
 # Page title 
 st.title("Workspace Explorer", text_alignment="center")
@@ -79,7 +78,7 @@ with tree_col:
                     unsafe_allow_html=True,
                 )
             for label in folder_files:
-                ext    = Path(label).suffix.lower()
+                ext = Path(label).suffix.lower()
                 is_sel = st.session_state[EXP_SEL] == label
 
                 if st.button(
@@ -87,8 +86,7 @@ with tree_col:
                     key=f"exp_{session_id}_{label}",
                     use_container_width=True,
                     type="primary" if is_sel else "secondary",
-                    help=label,
-                ):
+                    help=label):
                     st.session_state[EXP_SEL] = label
 
 with preview_col:

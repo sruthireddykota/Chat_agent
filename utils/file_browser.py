@@ -19,12 +19,21 @@ LANG_MAP = {
 
 
 def _collect_files(workspace: str) -> list[Path]:
-    skip = {"__pycache__", ".git", "__init__", "node_modules", ".venv"}
+    skip_dirs = {"__pycache__", ".git", "node_modules", ".venv"}
+    skip_files = {"__init__.py", "init.py"}
+
     result = []
+
     for root, dirs, files in os.walk(workspace):
-        dirs[:] = [d for d in dirs if d not in skip]
+        # Skip directories
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
+
+        # Skip files
         for f in sorted(files):
+            if f in skip_files:
+                continue
             result.append(Path(root) / f)
+
     return sorted(result)
 
 

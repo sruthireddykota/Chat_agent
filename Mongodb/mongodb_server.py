@@ -1,4 +1,3 @@
-from itertools import count
 from pymongo import MongoClient, DESCENDING
 from pymongo.errors import ConnectionFailure
 from datetime import datetime
@@ -302,9 +301,4 @@ class MongoStore:
             "avg_groundedness":      round(row["avg_groundedness"],      3) if row["avg_groundedness"]      is not None else None,
             "total_evaluations":     row["total_evaluations"]
         }
-        
-            
-                
-            
-        
         

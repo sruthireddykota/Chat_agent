@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @modelcontextprotocol/server-filesystem
+RUN npm install -g @mako10k/mcp-shell-server@2.1.8
 
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
@@ -26,5 +27,8 @@ COPY ./assets/         /app/assets/
 COPY main.py           /app/main.py
 
 EXPOSE 8501
+
+# RUN useradd -m appuser && chown -R appuser:appuser /app
+# USER appuser
 
 CMD ["streamlit", "run", "main.py", "--server.port", "8501", "--server.address", "0.0.0.0"]

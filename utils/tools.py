@@ -70,3 +70,4 @@ async def call_mcp_tool(mcp_client, tool_name: str, **kwargs) -> str:
     except Exception as e:
         logger.error(f'[{tool_name}] error: {e}', exc_info=True)
         return f"Error in {tool_name}: {str(e)}"
+

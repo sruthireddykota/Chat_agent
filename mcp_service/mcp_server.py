@@ -33,10 +33,7 @@ def wait_for_rate_limit():
 
 
 @mcp.tool()
-def brave_web_search(
-    query: str,
-    count: int = 10,
-    freshness: Optional[str] = None) -> dict:
+def brave_web_search(query: str, count: int = 10,freshness: Optional[str] = None) -> dict:
     """
     Search the web using Brave Search API with rate limiting and caching.
     

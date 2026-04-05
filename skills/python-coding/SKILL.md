@@ -1,12 +1,23 @@
 ---
 name: python-coding
 description: Write, debug, review, and generate tests for Python code following best practices. Use when asked to write Python functions, classes, or modules; fix Python errors or tracebacks; review existing Python code; or generate Python unit tests. Covers async, type hints, error handling, and project structure conventions.
-license: MIT
 compatibility: Requires python3.10+. Scripts use stdlib only — no pip install needed.
 metadata:
   author: agent-framework
   version: "1.0"
 ---
+
+## Skill entry point
+
+When this skill is loaded, always execute in this order:
+1. Read `references/CODING_STANDARDS.md` — mandatory before writing any code
+2. Identify task type from ## Instructions below
+3. Follow the workflow for that task type exactly
+4. Run the relevant script to validate output before returning
+
+## Dependencies
+
+None. Scripts use stdlib only — no install needed.
 
 ## Purpose
 

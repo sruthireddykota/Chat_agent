@@ -1,12 +1,23 @@
 ---
 name: sql-coding
 description: Write, debug, review, and optimize SQL queries. Use when asked to write SELECT, INSERT, UPDATE, or DELETE queries; design or modify database schemas; fix SQL errors; optimize slow queries; or write migrations. Covers PostgreSQL and standard SQL patterns.
-license: MIT
 compatibility: Requires python3. Scripts use stdlib only.
 metadata:
   author: agent-framework
   version: "1.0"
 ---
+
+## Skill entry point
+
+When this skill is loaded, always execute in this order:
+1. Read `references/SQL_STANDARDS.md` — mandatory before writing any query
+2. Identify task type from ## Instructions below
+3. Follow the workflow for that task type exactly
+4. Run validate_query.py on all output before returning
+
+## Dependencies
+
+None. Scripts use stdlib only — no install needed.
 
 ## Purpose
 

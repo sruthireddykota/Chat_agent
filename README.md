@@ -404,7 +404,7 @@ Core dependencies from `requirements.txt`:
 
 ## Presentation
 
-[view presentation](https://docs.google.com/presentation/d/1XpXlxz_L5HKgczQPkYmbAbu8TwiV4KBM/edit?usp=sharing&ouid=102516658501058113497&rtpof=true&sd=true)
+[view presentation](https://docs.google.com/presentation/d/1-Fq1xk-EuLj7SGsEnSPTA03t266wOiaD/edit?usp=sharing&ouid=102516658501058113497&rtpof=true&sd=true)
 
 [view gamma presentation](https://multi-agent-chatbot-syst-70gddpc.gamma.site/)
 
