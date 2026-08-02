@@ -30,6 +30,7 @@ env.bak/
 venv.bak/
 myvenv/
 agentvenv/
+tests/
 
 # Environment & secrets
 *.env
@@ -103,3 +104,6 @@ workspace/
 agent_data/
 
 tests/
+
+#backup
+frontend_backup/

@@ -50,7 +50,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
-tests/
+tests/*
+!tests/test_title_generation.py
 
 # Secrets & config
 *.env
@@ -75,6 +76,10 @@ docker-compose.override.yml
 workspace/
 agent_data/
 
-tests/
+tests/*
+!tests/test_title_generation.py
+
+frontend/
+frontend_backup/
 
 node_modules
