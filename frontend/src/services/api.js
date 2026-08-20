@@ -7,9 +7,13 @@ async function request(path, { method = "GET", body, params } = {}) {
     if (qs) url += `?${qs}`;
   }
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+  const token = window.localStorage.getItem("chat_agent_access_token");
   const res = await fetch(url, {
     method,
-    headers: body && !isFormData ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body && !isFormData ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
   });
   const text = await res.text();
@@ -41,6 +45,23 @@ export const api = {
   // GET /chat/{session_id}?limit=
   getChatHistory: (session_id, limit = 50) =>
     request(`/api/v1/chat/${session_id}`, { params: { limit } }),
+  getConversationCount: (session_id) =>
+    request(`/api/v1/sessions/${session_id}/conversation-count`),
+  getConversationMessages: (session_id, limit = 50) =>
+    request(`/api/v1/sessions/${session_id}/conversation-messages`, { params: { limit } }),
+  summarizeConversation: (session_id, messages) =>
+    request(`/api/v1/sessions/${session_id}/summarize`, {
+      method: "POST",
+      body: { messages },
+    }),
+  replaceWithSummary: (session_id, summary) =>
+    request(`/api/v1/sessions/${session_id}/replace-with-summary`, {
+      method: "POST",
+      body: { summary },
+    }),
+
+
+    
   // POST /message   body: message dict (server stamps `timestamp`)
   saveMessage: (message) =>
     request("/api/v1/message", { method: "POST", body: message }),
@@ -50,6 +71,62 @@ export const api = {
   // POST /agent/run   body: { query: { text, files }, session_id, user_id, agent_name }
   runAgent: (payload) =>
     request("/api/v1/agent/run", { method: "POST", body: payload }),
+
+  streamAgent: async (payload, onEvent) => {
+    const normalizedPayload = {
+      query: {
+        text: String(payload?.query?.text ?? ""),
+        files: Array.isArray(payload?.query?.files) ? payload.query.files : [],
+      },
+      session_id: String(payload?.session_id ?? ""),
+      user_id: String(payload?.user_id ?? "anonymous"),
+      agent_name: String(payload?.agent_name || "generic").toLowerCase(),
+    };
+
+    const res = await fetch(`${API_URL}/api/v1/agent/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(window.localStorage.getItem("chat_agent_access_token")
+          ? { Authorization: `Bearer ${window.localStorage.getItem("chat_agent_access_token")}` }
+          : {}),
+      },
+      body: JSON.stringify(normalizedPayload),
+    });
+
+    if (!res.ok || !res.body) {
+      const text = await res.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch { /* plain text error */ }
+      throw new Error(data?.detail || text || `POST /api/v1/agent/stream → ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          const line = event.split("\n").find((item) => item.startsWith("data:"));
+          if (!line) continue;
+          const envelope = JSON.parse(line.slice(5).trim());
+          onEvent(envelope);
+          if (envelope.type === "completed" || envelope.type === "error") return;
+        }
+
+        if (done) break;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  },
   // GET /workspace/{session_id}
   getWorkspace: (session_id) => request(`/api/v1/workspace/${session_id}`),
 

@@ -11,6 +11,7 @@ import {
   Bot,
   Activity,
   Paperclip,
+  Loader2,
 } from "lucide-react";
 import AppShell from "../components/AppShell.jsx";
 import { Badge } from "../components/ui.jsx";
@@ -38,7 +39,9 @@ export default function Chatbot() {
 
   const [input, setInput] = useState("");
   const [attachment, setAttachment] = useState(null);
-  const [showPanel, setShowPanel] = useState(true);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+  const [showPanel, setShowPanel] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [panelWidth, setPanelWidth] = useState(400);
   const scrollRef = useRef(null);
@@ -123,6 +126,12 @@ export default function Chatbot() {
             files: {},
           })));
           if (!currentSessionId) setCurrentSessionId(rows[0].session_id);
+        } else if (alive && !currentSessionId) {
+          const sid = uid();
+          const session = { id: sid, title: "New Chat", agent: selectedAgent, files: {} };
+          setSessions([session]);
+          setCurrentSessionId(sid);
+          try { await api.createSession(sid, userId); } catch { /* local fallback remains usable */ }
         }
       } catch {
         /* backend not up — keep mock sessions */
@@ -133,8 +142,13 @@ export default function Chatbot() {
   }, [userId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, running]);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }, [messages.length, running, summarizing, summaryError]);
 
   // Resizable activity panel.
   const onDragMove = useCallback((e) => {
@@ -188,12 +202,43 @@ export default function Chatbot() {
     RAG: "rag",
   };
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
-    if ((!text && !attachment) || running) return;
-    const sid = currentSessionId;
+    if ((!text && !attachment) || running || summarizing) return;
+    let sid = currentSessionId;
+    if (!sid) {
+      sid = uid();
+      const session = { id: sid, title: "New Chat", agent: selectedAgent, files: {} };
+      setSessions((previous) => [session, ...previous]);
+      setCurrentSessionId(sid);
+      try { await api.createSession(sid, userId); } catch { /* agent can still use the generated id */ }
+    }
     const files = attachment ? [attachment] : [];
-    void startRun({
+    // The message has been submitted; clear the composer immediately while
+    // the conversation summary or agent response is being processed.
+    setInput("");
+    setAttachment(null);
+    setSummaryError(null);
+    setSummarizing(true);
+    try {
+      const countResult = await api.getConversationCount(sid);
+      const count = Number(countResult?.count || 0);
+
+      if (count >= 7) {
+        const conversationResult = await api.getConversationMessages(sid, count);
+        const conversationMessages = conversationResult?.messages || [];
+        const summaryResult = await api.summarizeConversation(sid, conversationMessages);
+        if (!summaryResult?.summary) throw new Error("Conversation summary was empty.");
+        await api.replaceWithSummary(sid, summaryResult.summary);
+      }
+    } catch (error) {
+      setSummaryError(error?.message || "Could not summarize the conversation.");
+      setSummarizing(false);
+      return;
+    }
+    setSummarizing(false);
+
+    await startRun({
       type: "run",
       query: text || "Please analyze the attached file.",
       session_id: sid,
@@ -201,12 +246,9 @@ export default function Chatbot() {
       user_id: userId,
       files,
       metadata: {},
-    }).then(async () => {
-      await refreshSessions();
-      await loadWorkspace(sid);
     });
-    setInput("");
-    setAttachment(null);
+    await refreshSessions();
+    await loadWorkspace(sid);
   };
 
   const selectAttachment = (event) => {
@@ -333,7 +375,25 @@ export default function Chatbot() {
               </div>
             )}
 
-            {running && !prompt && (
+            {summarizing && (
+              <div className="flex gap-3">
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-600 text-white">
+                  <Bot size={16} />
+                </div>
+                <div className="flex items-center gap-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+                  <Loader2 size={15} className="animate-spin" />
+                  Summarizing our conversation, please wait…
+                </div>
+              </div>
+            )}
+
+            {summaryError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {summaryError}
+              </div>
+            )}
+
+            {running && !summarizing && !prompt && !messages.some((message) => message.streaming) && (
               <div className="flex gap-3">
                 <div className="grid h-8 w-8 place-items-center rounded-full bg-brand-600 text-white">
                   <Bot size={16} />
@@ -366,7 +426,7 @@ export default function Chatbot() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={running}
+                disabled={running || summarizing}
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50"
                 title="Attach a file"
               >
@@ -382,12 +442,12 @@ export default function Chatbot() {
                     send();
                   }
                 }}
-                placeholder={running ? "Agent is working…" : "Enter your query…"}
+                placeholder={summarizing ? "Summarizing our conversation…" : running ? "Agent is working…" : "Enter your query…"}
                 className="max-h-32 flex-1 resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
               />
               <button
                 onClick={send}
-                disabled={(!input.trim() && !attachment) || running}
+                disabled={(!input.trim() && !attachment) || running || summarizing}
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white transition hover:bg-brand-700 disabled:bg-brand-300"
                 title="Send"
               >

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, Mail, Lock, User, X, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import { Mail, Lock, User, X, ArrowRight, Sparkles, Loader2 } from "lucide-react";
+import iconMark from "../../assets/agentic-platform-icon-mark.svg";
 import { useApp } from "../context/AppContext.jsx";
 import { api } from "../services/api.js";
 import { Button } from "../components/ui.jsx";
+import bcrypt from "bcryptjs";
 
 const uuid = () =>
   (crypto.randomUUID && crypto.randomUUID()) ||
@@ -30,22 +32,33 @@ function SignupDialog({ onClose }) {
 
   const submit = async () => {
     if (username.length <= 6) return setMsg({ t: "err", m: "Username should be greater than 6 characters" });
-    if (password.length <= 8) return setMsg({ t: "err", m: "Password should be greater than 8 characters" });
+    if (password.length < 8) return setMsg({ t: "err", m: "Password must be at least 8 characters" });
+    if (!/[A-Z]/.test(password)) return setMsg({ t: "err", m: "Password must contain at least one uppercase letter" });
+    if (!/[^A-Za-z0-9]/.test(password)) return setMsg({ t: "err", m: "Password must contain at least one symbol" });
     if (email.length <= 10) return setMsg({ t: "err", m: "Email ID should be greater than 10 characters" });
     setBusy(true);
     try {
+      // Match Python bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).
+      // Login still sends the raw password because the backend verifies it
+      // with bcrypt.checkpw against this stored hash.
+      const hashedPassword = await bcrypt.hash(password, 12);
       const res = await api.createUser({
         username,
         user_id: uuid(),
         email_id: email,
-        password,
+        password: hashedPassword,
         logged_in: false,
         last_logged_in: null,
       });
       if (res && res.status === "error") setMsg({ t: "err", m: res.message || "Sign up failed" });
       else setMsg({ t: "ok", m: "Sign up successful — you can now log in." });
-    } catch {
-      setMsg({ t: "err", m: "Sign up failed — is the server running?" });
+    } catch (error) {
+      const detail = String(error?.message || "");
+      const isInternalError = /^error\b/i.test(detail) || /failed to fetch|network error/i.test(detail);
+      setMsg({
+        t: "err",
+        m: isInternalError ? "Sign up failed" : detail || "Sign up failed",
+      });
     } finally {
       setBusy(false);
     }
@@ -96,7 +109,13 @@ export default function Login() {
       const res = await api.login(email, password);
       if (res?.success) {
         // The backend already flips logged_in=true and returns the user_id.
-        login({ username: email.split("@")[0], email, user_id: res.user_id });
+        login({
+          username: email.split("@")[0],
+          email,
+          user_id: res.user_id,
+          role: res.role || "user",
+          access_token: res.access_token,
+        });
         navigate("/");
       } else {
         setError(res?.message || "Login failed");
@@ -123,12 +142,12 @@ export default function Login() {
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
           <div className="flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/15 backdrop-blur">
-              <Bot size={24} />
+              <img src={iconMark} alt="Agentic Platform" className="h-11 w-11 rounded-xl" />
             </div>
             <span className="text-lg font-bold">ChatAgent</span>
           </div>
           <div>
-            <h1 className="max-w-md text-4xl font-extrabold leading-tight">One platform. Four specialized agents.</h1>
+            <h1 className="max-w-md text-4xl font-extrabold leading-tight">Agent Platform</h1>
             <p className="mt-4 max-w-md text-brand-100">
               Chat with generic, coding, research, and RAG agents. Parse documents into a vector store and evaluate your retrieval pipeline — all in one place.
             </p>

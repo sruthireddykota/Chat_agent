@@ -3,6 +3,8 @@ FROM python:3.12-slim
 WORKDIR /app
 
 ENV PYTHONPATH=/app
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -10,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY app/mcp/requirements_mcp.txt /app/
-RUN pip install --no-cache-dir -r requirements_mcp.txt
+RUN pip install --no-cache-dir --timeout 300 --retries 10 -r requirements_mcp.txt
 
 COPY app/__init__.py                        /app/app/__init__.py
 COPY app/services/__init__.py               /app/app/services/__init__.py
@@ -20,6 +22,7 @@ COPY app/services/chat_history_retrieval.py /app/app/services/chat_history_retri
 COPY app/config/ /app/app/config/
 COPY app/mcp/__init__.py    /app/app/mcp/__init__.py
 COPY app/mcp/mcp_server.py  /app/app/mcp/mcp_server.py
+COPY app/utils/logger.py /app/app/utils/logger.py
 
 EXPOSE 8000
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.constants import (Role,AgentType)
 
@@ -10,9 +10,11 @@ class AgentRequest(BaseModel):
     query: QueryRequest 
     session_id: str = Field(description="User Session ID")
     user_id : str = Field(description="User ID")
-
-
-class AgentRunRequest(AgentRequest):
     agent_name: AgentType = Field(default=AgentType.GENERIC)
 
-
+    @field_validator("agent_name", mode="before")
+    @classmethod
+    def normalize_agent_name(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value

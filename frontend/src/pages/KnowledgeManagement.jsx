@@ -44,7 +44,7 @@ export default function KnowledgeManagement() {
       const rows = await api.getDocuments();
       setDocs((Array.isArray(rows) ? rows : []).map(norm));
     } catch {
-      setError("Couldn't load documents — is the API running?");
+      setError("Couldn't load documents");
     } finally {
       setLoading(false);
     }

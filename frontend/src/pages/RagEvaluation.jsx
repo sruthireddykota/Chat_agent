@@ -32,7 +32,7 @@ export default function RagEvaluation() {
     try {
       setMetrics(await api.getAverageMetrics());
     } catch {
-      setError("Couldn't load metrics — is the API running?");
+      setError("Couldn't load metrics");
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function RagEvaluation() {
           <FileSpreadsheet size={17} className="text-brand-600" /> Evaluate questions from CSV
         </div>
         <p className="mb-4 text-sm text-slate-500">
-          Upload a CSV with a <code>Questions</code>, <code>question</code>, or <code>Question</code> column.
+          Upload a CSV with a <code>Questions</code> column.
           The RAG agent will answer each question and calculate the evaluation metrics.
         </p>
         <div className="flex flex-wrap items-center gap-3">
@@ -127,6 +127,7 @@ export default function RagEvaluation() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {entries.map(([key, value], i) => {
+            const isCount = key === "total_evaluations";
             const frac = asFraction(value);
             return (
               <Card key={key} className="p-5">
@@ -135,13 +136,15 @@ export default function RagEvaluation() {
                   <Gauge size={16} className="text-slate-300" />
                 </div>
                 <div className="mb-2 text-3xl font-bold text-slate-900">
-                  {frac != null ? (
+                  {isCount ? (
+                    Math.round(Number(value) || 0)
+                  ) : frac != null ? (
                     <>{Math.round(frac * 100)}<span className="text-lg text-slate-400">%</span></>
                   ) : (
                     String(value)
                   )}
                 </div>
-                {frac != null && <ProgressBar value={frac} color={COLORS[i % COLORS.length]} />}
+                {!isCount && frac != null && <ProgressBar value={frac} color={COLORS[i % COLORS.length]} />}
               </Card>
             );
           })}

@@ -54,7 +54,7 @@ class ResearcherAgentInstructions:
 
     #### Capabilities:
     - repo_search → find models, datasets, and Spaces  
-    - papers_search → retrieve ML/AI research papers  
+    - papers_search → retrieve ML/AI research papers through the academic-research provider
     - documentation_search → search Hugging Face docs  
     - spaces_search → discover AI applications  
     - repository_details → fetch detailed repo metadata
@@ -76,7 +76,7 @@ class ResearcherAgentInstructions:
     ### 1. Query Classification
     - News / current events → web_search
     - Scientific / technical → academic-research + web_search
-    - Machine learning / AI → hf_mcp + academic-research (+ web_search if needed)
+    - Machine learning / AI → academic-research + hf_mcp (+ web_search if needed)
     - Literature review → academic-research first, then hf_mcp/web_search
 
     ---
@@ -95,6 +95,8 @@ class ResearcherAgentInstructions:
     - Use hf_mcp for:
     - up-to-date model/dataset discovery
     - implementation references
+    - Use papers_search/OpenAlex for scholarly paper discovery; do not call a
+      Hugging Face MCP tool directly for papers.
     - Avoid unnecessary tool calls if answer is already well-supported
 
     ---

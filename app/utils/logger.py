@@ -29,5 +29,7 @@ def get_logger(name=__name__):
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
 
-    logger.propagate = False
+    # Azure Monitor's OpenTelemetry LoggingHandler is attached to the
+    # configured parent logger. Allow application records to reach it.
+    logger.propagate = True
     return logger

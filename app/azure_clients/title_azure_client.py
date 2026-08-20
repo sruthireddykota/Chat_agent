@@ -1,4 +1,4 @@
-from openai import AzureOpenAI
+from openai import AsyncAzureOpenAI
 from dotenv import load_dotenv
 import os
 from app.utils.logger import get_logger
@@ -6,9 +6,9 @@ from app.utils.logger import get_logger
 logger = get_logger()
 load_dotenv()
 
-def get_client():
+async def get_client():
     try:
-        client = AzureOpenAI(
+        client = AsyncAzureOpenAI(
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("OPENAI_API_VERSION")

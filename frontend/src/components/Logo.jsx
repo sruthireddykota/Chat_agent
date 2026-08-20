@@ -1,10 +1,10 @@
-import { Bot } from "lucide-react";
+import iconMark from "../../assets/agentic-platform-icon-mark.svg";
 
 export default function Logo({ compact = false }) {
   return (
     <div className="flex items-center gap-2.5 select-none">
       <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-soft">
-        <Bot size={20} strokeWidth={2.2} />
+        <img src={iconMark} alt="Agentic Platform" className="h-9 w-9 rounded-xl" />
       </div>
       {!compact && (
         <div className="leading-tight">

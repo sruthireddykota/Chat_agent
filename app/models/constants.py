@@ -10,3 +10,14 @@ class AgentType(str,Enum):
     GENERIC :str= "generic"
     RESEARCHER :str= "researcher"
     RAG :str= "rag"
+    
+class WorkflowType(str,Enum):
+    SEQUENTIAL : str = "sequential"
+    CONCURRENT : str = "concurrent"
+    HANDOFF : str = "handoff"
+    GROUPCHAT: str = "groupchat"
+
+class Status(str,Enum):
+    SUCCESS : str = "success"
+    FAIL : str = "failed"
+    NOTSTARTED : str = "notstarted"

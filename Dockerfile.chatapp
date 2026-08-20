@@ -2,6 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -14,7 +17,7 @@ RUN npm install -g @mako10k/mcp-shell-server@2.1.8
 
 COPY requirements.txt /app/
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 300 --retries 10 -r requirements.txt
 
 COPY ./app/ /app/
 COPY ./frontend_backup /app/frontend/

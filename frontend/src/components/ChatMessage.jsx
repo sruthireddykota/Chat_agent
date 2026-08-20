@@ -1,7 +1,51 @@
 import { Bot, User as UserIcon, Clock, Wrench } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import ToolCallCard from "./ToolCallCard.jsx";
 import PlanPrompt from "./PlanPrompt.jsx";
 import ReasoningBlock from "./ReasoningBlock.jsx";
+
+function MarkdownContent({ children }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ node, ...props }) => (
+          <a {...props} target="_blank" rel="noreferrer" />
+        ),
+        code: ({ node, className, children, ...props }) => {
+          const isBlock = Boolean(className?.includes("language-"));
+          return (
+            <code
+              className={isBlock ? className : "rounded bg-slate-100 px-1 py-0.5 text-[0.9em]"}
+              {...props}
+            >
+              {children}
+            </code>
+          );
+        },
+        pre: ({ children }) => (
+          <pre className="my-3 overflow-x-auto rounded-lg bg-slate-100 p-3 text-xs leading-relaxed text-slate-800">
+            {children}
+          </pre>
+        ),
+        table: ({ children }) => (
+          <div className="my-3 overflow-x-auto">
+            <table className="min-w-full border-collapse text-left text-sm">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border border-slate-200 bg-slate-50 px-3 py-2 font-semibold">{children}</th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-slate-200 px-3 py-2 align-top">{children}</td>
+        ),
+      }}
+    >
+      {String(children ?? "")}
+    </ReactMarkdown>
+  );
+}
 
 function TurnFooter({ usage, blocks }) {
   const tools = (blocks ?? []).filter((b) => b.type === "tool");
@@ -87,15 +131,15 @@ export default function ChatMessage({ message, onAnswer }) {
               return (
                 <div
                   key={i}
-                  className="my-1 whitespace-pre-wrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-slate-800"
+                  className="markdown-content my-1 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-slate-800"
                 >
-                  {b.text}
+                  <MarkdownContent>{b.text}</MarkdownContent>
                 </div>
               );
             })
           ) : (
-            <div className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-slate-800">
-              {message.content}
+            <div className="markdown-content rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm leading-relaxed text-slate-800">
+              <MarkdownContent>{message.content}</MarkdownContent>
             </div>
           )}
         </div>

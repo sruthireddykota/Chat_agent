@@ -13,9 +13,14 @@ logger = get_logger()
 
 class RAGAgent(BaseAgent):
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, mongodb_storage, azure_client):
 
-        super().__init__(session_id=session_id, allowed_tools=["rag_retreival", "get_history"])
+        super().__init__(
+            session_id=session_id, 
+            allowed_tools=["rag_retrieval", "get_history"],
+            mongodb_storage=mongodb_storage,
+            azure_client=azure_client
+        )
         
         self.instructions = RagAgentInstructions.get_instructions()
         self.rag_tools = RAGTools(
@@ -30,21 +35,31 @@ class RAGAgent(BaseAgent):
             session_id = requestdata["session_id"]
             query = requestdata["query"]
             user_id = requestdata["user_id"]
-
+            self.rag_tools.authorization = requestdata.get("authorization")
+            tools_list = await self.rag_tools.get_tool_functions()
+            
             agent = Agent(
                 name = AgentType.RAG,
                 client=self.client,
                 instructions=self.instructions,
-                tools=self.rag_tools.get_tool_functions()
+                tools=tools_list,
             )
-            message=self.build_message(query=query)
+            
+            
             async with self.mcp_manager.mcp_session():
+                try:
+                    history = await self.rag_tools._get_history_logic()
+                except Exception as e:
+                    logger.error(f"[RAG Agent] Chat history call failed, error: {e}")
+
+                message = await self.build_message(query=query,history=history)
+
                 self.rag_tools.last_context = []
 
-                response=await self.agent_executor.agent_executor(agent=agent,message=message,session_id=session_id)
+                response = await self.agent_executor.agent_executor(agent=agent,message=message,session_id=session_id)
               
-                if response:
-                    self.mongo_message_store(
+                if response: 
+                    await self.mongo_message_store(
                         session_id=session_id,
                         response=response,
                         query=query,

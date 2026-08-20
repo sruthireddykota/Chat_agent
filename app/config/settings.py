@@ -44,7 +44,15 @@ class Settings(BaseSettings):
     AZURE_OPENAI_DEPLOYMENT: str
     MAX_CONTEXT_WINDOW_TOKENS : int = 100000
     MAX_OUTPUT_TOKENS : int = 100000
+
+    DOCLING_FILE_URL:str
+    DOCLING_DOCUMENT_URL:str
+
+    APPLICATION_INSIGHTS_CONNECTION_STR:str
+
+    JWT_SECRET: str
+    JWT_ISSUER: str = "chat-agent"
+    JWT_EXPIRE_MINUTES: int = 60
     
 
 settings = Settings()
-

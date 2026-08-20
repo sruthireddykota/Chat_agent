@@ -1,30 +1,26 @@
 from typing import Dict
 import json
 
+import httpx
+
 from agent_framework import MCPStreamableHTTPTool
 from app.utils.logger import get_logger
 
 logger=get_logger()
 
-async def _get_history(mcp_client, session_id: str) -> str:
+async def _get_history(mcp_client, session_id: str, authorization: str | None = None) -> str:
     logger.info(f"[Chat History] MCP tool called for {session_id}")
 
     try:
-        response = await mcp_client.call_tool("get_chat_history", session_id=session_id)
-        messages = response[0].text
-
-        return (
-            "**Prior Conversation (for reference only):**\n\n"
-            f"{messages}\n\n"
-            "Only use this if the current question explicitly refers back to something "
-            "earlier (e.g. 'what did I ask before', 'go back to that'). Otherwise, treat "
-            "the current question as a new, independent topic and retrieve fresh content "
-            "for it — do not assume it continues the previous subject."
+        response = await mcp_client.call_tool(
+            "get_chat_history",
+            session_id=session_id,
+            authorization=authorization,
         )
+        messages = response[0].text
+        logger.info(f"[Chat History] chat history retrieved for session {session_id}, total chars : {len(messages)}")
+        return messages
 
-    except Exception as e:
-        logger.error(f"[Chat History] error retrieving chat history: {e}", exc_info=True)
-        return f"Error retrieving chat history: {str(e)}"
 
     except Exception as e:
         logger.error(f"[Chat History] error retrieving chat history: {e}", exc_info=True)
@@ -67,6 +63,47 @@ async def hf_search(mcp_client: MCPStreamableHTTPTool, tool_name: str, **kwargs)
     except Exception as e:
         logger.error(f"[HUGGINGFACE MCP] error in {tool_name}: {e}", exc_info=True)
         return f"HUGGINGFACE MCP error: {str(e)}"
+
+
+async def academic_paper_search(query: str, limit: int = 10) -> str:
+    """Search academic papers through OpenAlex."""
+    try:
+        per_page = max(1, min(int(limit), 20))
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                "https://api.openalex.org/works",
+                params={
+                    "search": query,
+                    "per-page": per_page,
+                    "mailto": "topanga@ludwitt.com",
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        papers = []
+        for work in payload.get("results", []):
+            location = work.get("primary_location") or {}
+            source = location.get("source") or {}
+            authors = [
+                (author.get("author") or {}).get("display_name")
+                for author in (work.get("authorships") or [])[:5]
+            ]
+            papers.append({
+                "title": work.get("display_name"),
+                "year": work.get("publication_year"),
+                "authors": [author for author in authors if author],
+                "citations": work.get("cited_by_count", 0),
+                "doi": work.get("doi"),
+                "open_access": (work.get("open_access") or {}).get("is_oa", False),
+                "url": location.get("landing_page_url") or work.get("id"),
+                "source": source.get("display_name"),
+            })
+
+        return json.dumps({"source": "OpenAlex", "query": query, "papers": papers})
+    except Exception as e:
+        logger.error(f"[Academic Search] error searching papers: {e}", exc_info=True)
+        return f"Error performing papers search,error: {str(e)}"
     
 #Coder Agent Tool wrapper
 
@@ -77,4 +114,3 @@ async def call_mcp_tool(mcp_client, tool_name: str, **kwargs) -> str:
     except Exception as e:
         logger.error(f'[{tool_name}] error: {e}', exc_info=True)
         return f"Error in {tool_name}: {str(e)}"
-

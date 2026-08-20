@@ -1,0 +1,52 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: chat-api
+    url: http://fastapi:8001
+    connect_timeout: 10000
+    retries: 0
+    write_timeout: 30000
+    read_timeout: 300000
+    routes:
+      - name: api-health
+        paths: [ /api/v1/health ]
+        methods: [ GET ]
+        protocols: [ http, https ]
+        strip_path: false
+        preserve_host: true
+
+      - name: api-login
+        paths: [ /api/v1/user/login ]
+        methods: [ POST ]
+        protocols: [ http, https ]
+        strip_path: false
+        preserve_host: true
+
+      - name: api-signup
+        paths: [ /api/v1/users ]
+        methods: [ POST ]
+        protocols: [ http, https ]
+        strip_path: false
+        preserve_host: true
+
+      - name: api-protected
+        paths: [ /api ]
+        protocols: [ http, https ]
+        strip_path: false
+        preserve_host: true
+        request_buffering: false
+        response_buffering: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify: [ exp ]
+              run_on_preflight: false
+
+consumers:
+  - username: chat-agent-jwt
+    jwt_secrets:
+      - key: chat-agent
+        algorithm: HS256
+        secret: __JWT_SECRET__

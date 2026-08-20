@@ -141,7 +141,7 @@ def embed_search(query,limit):
         return results
     
 @mcp.tool()
-def rag_retrive(query:str)->dict:
+def rag_retrieval(query:str)->dict:
     """
     This tool takes a user query and returns top retrived chunks from the document database
 
@@ -174,7 +174,7 @@ def rag_retrive(query:str)->dict:
         }
 
 @mcp.tool()
-def get_chat_history(session_id:str)->str:
+async def get_chat_history(session_id: str, authorization: Optional[str] = None) -> str:
     """To get the chat history 
 
     Args:
@@ -183,12 +183,22 @@ def get_chat_history(session_id:str)->str:
     Returns:
         str: role of the user and content 
     """
-    from app.services.chat_history_retrieval import MongoStore
+    from app.services.chat_history_retrieval import get_chat_history as fetch_history
     try:
-        response=MongoStore().get_chat_history(session_id=session_id,limit=6)
-        return response
+        messages = await fetch_history(
+            session_id=session_id,
+            limit=9,
+            authorization=authorization,
+        )
+        if not messages:
+            return "No chat history found for this session."
+
+        formatted = "\n".join(
+            f"{m.get('role', 'unknown')}: {m.get('content', '')}" for m in messages
+        )
+        return formatted
     except Exception as e:
-        return f"No Chat History Found,error:{e}"
+        return f"No Chat History Found, error: {e}"
     
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request):

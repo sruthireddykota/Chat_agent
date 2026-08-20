@@ -12,10 +12,11 @@ class CoderTools:
         self.mcp_manager = mcp_manager
         self.redis_manager = redis_manager
         self.session_id = session_id
+        self.authorization = None
         self.filesystem_client = mcp_manager.mcp_filesystem_client
         self.fastmcp_client = mcp_manager.mcp_fastmcp_client
 
-    def get_tool_functions(self) -> List:
+    async def get_tool_functions(self) -> List:
 
         async def list_allowed_directories() -> str:
             """
@@ -341,4 +342,5 @@ Use this to retrieve the previous conversation history.
         return await _get_history(
             mcp_client=self.fastmcp_client,
             session_id=self.session_id,
+            authorization=self.authorization,
         )

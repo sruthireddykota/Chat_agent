@@ -17,7 +17,7 @@ logger = get_logger()
 
 class ResearcherAgent(BaseAgent):
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, mongodb_storage, azure_client):
         super().__init__(
             session_id=session_id,
             allowed_tools=[
@@ -29,6 +29,8 @@ class ResearcherAgent(BaseAgent):
                 "documentation_search",
                 "repository_details",
             ],
+            mongodb_storage=mongodb_storage,
+            azure_client=azure_client,
         )
 
         self.base_instructions = ResearcherAgentInstructions().get_instructions()
@@ -45,6 +47,9 @@ class ResearcherAgent(BaseAgent):
             session_id = requestdata["session_id"]
             query = requestdata["query"]
             user_id = requestdata["user_id"]
+            self.researcher_tools.authorization = requestdata.get("authorization")
+
+            tools_list= await self.researcher_tools.get_tool_functions()
 
             researcher_skills = SkillsProvider.from_paths(
                 skill_paths=[Path(__file__).parent.parent / "skills"],
@@ -54,26 +59,16 @@ class ResearcherAgent(BaseAgent):
                 disable_run_skill_script_approval=True,
             )
 
-            message = self.build_message(query=query)
-
             async with self.mcp_manager.mcp_session():
 
                 history = await self.researcher_tools._get_history_logic()
-
-                instructions = (
-                    f"{self.base_instructions}\n\n"
-                    "---\n\n"
-                    "## Conversation History (already retrieved, do not call get_history again)\n"
-                    f"{history}"
-                )
-
+                message = await self.build_message(query=query, history=history)
+                
                 agent = Agent(
                     name=AgentType.RESEARCHER,
                     client=self.client,
-                    instructions=instructions,
-                    tools=[
-                        *self.researcher_tools.get_tool_functions(),
-                    ],
+                    instructions=self.base_instructions,
+                    tools= tools_list,
                     context_providers=[researcher_skills]
                 )
 
@@ -84,7 +79,7 @@ class ResearcherAgent(BaseAgent):
                 )
 
                 if response:
-                    self.mongo_message_store(
+                    await self.mongo_message_store(
                         session_id=session_id,
                         response=response,
                         user_id=user_id,

@@ -1,9 +1,10 @@
-from pymongo import MongoClient, DESCENDING
-from pymongo.errors import ConnectionFailure
-from datetime import datetime
+from pymongo import DESCENDING, AsyncMongoClient
+from pymongo.errors import ConnectionFailure, PyMongoError
+from datetime import datetime, timezone, timedelta
 from app.utils.logger import get_logger
 from app.config.settings import settings
 from app.models.mongo import (MongoStoreMessage,MongoDocumentData, MongoUser, UserDetails)
+from app.models.workflow import WorkflowBuilder
 
 logger=get_logger()
 
@@ -13,14 +14,8 @@ class MongoStore:
         self._MONGODB_DB =settings.MONGODB_DB
         self.KM_DB=settings.MONGODB_KM_DB
         self.USERS_DB=settings.MONGODB_USER_DB
-        
-        try:
-            self.client = MongoClient(self._MONGO_URI, serverSelectionTimeoutMS=3000)
-            self.client.admin.command("ping")
-            logger.info("Connected to MongoDB")
-        except ConnectionFailure as e:
-            logger.error("MongoDB connection failed: %s", e)
-            raise
+    
+        self.client = AsyncMongoClient(self._MONGO_URI, serverSelectionTimeoutMS=3000)
         
         self.db = self.client[self._MONGODB_DB]
         self.km_db=self.client[self.KM_DB]
@@ -29,76 +24,102 @@ class MongoStore:
         self.rag_logs = self.db["rag_logs"]
         self.sessions = self.db["sessions"]
         self.messages = self.db["chatmessages"]
+        self.conversation = self.db["conversation"]
+        self.workflows = self.db["workflows"]
         self.documents=self.km_db["documents"]
         self.users=self.users_db["users"]
-        self._create_index()
     
-    
-    def create_title(self, content):
+    def close(self):
+        try:
+            self.client.close()
+            logger.info("[MonogoDB] connection closed successfully.")
+        except Exception as e:
+            logger.error("[MonogoDB] Error closing connection: %s", e)
+
+    async def connect(self):
+        try:
+            await self.client.admin.command("ping")
+            await self._create_index()
+
+            logger.info("Connected to MongoDB")
+
+        except ConnectionFailure as e:
+            logger.error("MongoDB connection failed: %s", e)
+            raise
+
+    async def _create_index(self):        
+        await self.sessions.create_index([("session_id", 1)], unique=True)
+        await self.sessions.create_index([("user_id", 1), ("updated_at", DESCENDING)])
+        await self.sessions.create_index([("user_id", 1), ("message_count", DESCENDING)])
+        await self.messages.create_index([("session_id", 1), ("timestamp", 1)])
+        await self.rag_logs.create_index([("session_id", 1), ("timestamp", 1)])
+        await self.workflows.create_index([("creator_id", 1), ("updated_timestamp", DESCENDING)])
+        await self.workflows.create_index([("id", 1), ("creator_id", 1)], unique=True)
+        
+    async def create_title(self, content):
         from app.azure_clients.title_azure_client import get_client
         logger.info("Generating title for content preview: %s", content.strip()[:50])
-        client=get_client()
-        content_preview=content.strip()[:200]
-        response = client.chat.completions.create(
-            # Title generation uses its own Azure OpenAI deployment. Agent
-            # requests use AZURE_OPENAI_DEPLOYMENT through Foundry instead.
+        client = await get_client()
+        content_preview = content.strip()[:200]
+        response = await client.chat.completions.create(
             model=settings.AZURE_DEPLOYMENT_NAME,
             messages=[
                 {"role": "system", "content": "create a title in 2-3 words from the content"},
                 {"role": "user", "content": content_preview}
             ],
-            max_tokens=10
+            max_tokens=20
         )
         title=response.choices[0].message.content
         title = title.strip().strip('"').strip("'")
         logger.info("Generated title: %s", title)
         return title
         
-    def _create_index(self):        
-        self.sessions.create_index([("session_id", 1)], unique=True)
-        self.sessions.create_index([("user_id", 1), ("updated_at", DESCENDING)])
-        self.sessions.create_index([("user_id", 1), ("message_count", DESCENDING)])
-        self.messages.create_index([("session_id", 1), ("timestamp", 1)])
-        self.rag_logs.create_index([("session_id", 1), ("timestamp", 1)])
         
-    def create_session(self, session_id: str, user_id: str):
+    async def create_session(self, session_id: str, user_id: str):
         try:
-            result = self.sessions.insert_one({
+            result = await self.sessions.insert_one({
                 "user_id": user_id,
                 "session_id": session_id,
                 "title": "New Chat",
                 "message_count": 0,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
             })
             return str(result.inserted_id)
         except Exception as e:
             return None
 
-    def get_sessions(self, user_id: str, limit: int = 10):
+    async def get_sessions(self, user_id: str, limit: int = 10):
         try:
             sessions = self.sessions.find({'user_id': user_id}).sort("updated_at", DESCENDING).limit(limit)
             result = []
-            for session in sessions:
+            async for session in sessions:
                 session["_id"] = str(session["_id"])
                 result.append(session)
 
             return result
         except Exception as e:
             return None
-    
-    def delete_session(self, session_id):
+
+    async def get_session_owner(self, session_id: str):
         try:
-            result = self.messages.delete_many({"session_id": session_id})
+            session = await self.sessions.find_one({"session_id": session_id}, {"user_id": 1})
+            return session.get("user_id") if session else None
+        except Exception:
+            return None
+    
+    async def delete_session(self, session_id):
+        try:
+            result = await self.messages.delete_many({"session_id": session_id})
             if result:
-                output = self.sessions.delete_one({"session_id": session_id})
+                output = await self.sessions.delete_one({"session_id": session_id})
             
             logger.info(f"Deleted session_id: {session_id}, messages_deleted: {result.deleted_count}, session_deleted: {output.deleted_count if result else 0}")
             return output.deleted_count > 0
         except Exception as e:
             return None
     
-    def get_chat_history(self, session_id: str, limit: int = 10):
+    async def get_chat_history(self, session_id: str, limit: int = 10):
         try:
             messages = (
                 self.messages
@@ -107,7 +128,7 @@ class MongoStore:
                 .limit(limit)
             )
             result = []
-            for message in messages:
+            async for message in messages:
                 message["_id"] = str(message["_id"])
                 result.append(message)
             result.reverse()  
@@ -115,11 +136,11 @@ class MongoStore:
         except Exception as e:
             return None
 
-    def save_message(self, message: MongoStoreMessage) -> str:
+    async def save_message(self, message: MongoStoreMessage) -> str:
         try:
-            timestamp = message.get("timestamp") or datetime.utcnow().isoformat()
+            timestamp = message.get("timestamp") or datetime.now(timezone.utc).isoformat()
 
-            result = self.messages.insert_one({
+            result = await self.messages.insert_one({
                 "session_id": message["session_id"],
                 "role": message["role"],
                 "content": message["content"],
@@ -129,41 +150,44 @@ class MongoStore:
                 "user_id": message["user_id"]
             })
             
-            self.sessions.update_one(
+            await self.sessions.update_one(
                 {"session_id": message.get("session_id")},
                 {
                     "$inc": {"message_count": 1},
-                    "$set": {"updated_at": datetime.utcnow().isoformat()}
+                    "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
                 })
             
             
             if message.get("role") == "user":
-                session_output = list(self.sessions.find({'session_id': message.get("session_id")}))
-                count = session_output[0].get("message_count")
-                if count == 1:
-                    content = message.get("content")
-                    
-                    if content and content.strip():
-                        try:
-                            title = self.create_title(content)  
-                            if not isinstance(title, str):
-                                title = str(title) if title else "New Chat"
-                            logger.info("Generated title: %s", title)
-                            title = title.strip()[:50]
-                            
-                        except Exception as e:
-                            logger.error("Error generating title: %s", e)
-                            title = "New Chat"
-                    else:
-                        logger.info("Content is empty or whitespace. Using default title.")
-                        title = "New Chat"
+                session_output = await self.sessions.find_one({'session_id': message.get("session_id")})
+                if session_output is not None:
+
+                    count = session_output.get("message_count")
+                    if count == 1:
+                        content = message.get("content")
                         
-                    self.sessions.update_one(
-                        {"session_id": message.get("session_id")},
-                        {
-                            "$set": {"title": title, "updated_at": datetime.utcnow().isoformat()}
-                        }
-                    )
+                        if content and content.strip():
+                            try:
+                                title = await self.create_title(content)  
+                                if not isinstance(title, str):
+                                    title = str(title) if title else "New Chat"
+                                logger.info("Generated title: %s", title)
+                                title = title.strip()[:50]
+                                
+                            except Exception as e:
+                                logger.error("Error generating title: %s", e)
+                                title = "New Chat"
+                        else:
+                            logger.info("Content is empty or whitespace. Using default title.")
+                            title = "New Chat"
+                            
+                        await self.sessions.update_one(
+                            {"session_id": message.get("session_id")},
+                            {
+                                "$set": {"title": title, "updated_at": datetime.now(timezone.utc).isoformat()}
+                            }
+                        )
+
             logger.info(f"Saved message for session_id: {message.get('session_id')}, role: {message.get('role')}")
             return str(result.inserted_id)
 
@@ -171,25 +195,26 @@ class MongoStore:
             logger.error(f"Error saving message: {e}", exc_info=True)
             return None
 
-    def clear_chatmessages(self, session_id):
+    async def clear_chatmessages(self, session_id):
         try:
-            result = self.messages.delete_many({"session_id": session_id})
+            result = await self.messages.delete_many({"session_id": session_id})
             
-            self.sessions.update_one(
+            await self.sessions.update_one(
                 {"session_id": session_id},
                 {
-                    "$set": {"message_count": 0, "updated_at": datetime.utcnow().isoformat()}
+                    "$set": {"message_count": 0, "updated_at": datetime.now(timezone.utc).isoformat()}
                 }
             )
             logger.info(f"Cleared chat messages for session_id: {session_id}, deleted_count: {result.deleted_count}")
             return result.deleted_count
+        
         except Exception as e:
             return None
     
 
-    def store_documents(self, document_data: MongoDocumentData):
+    async def store_documents(self, document_data: MongoDocumentData):
         try:
-            self.documents.insert_one({
+            await self.documents.insert_one({
                 "document_name": document_data.document_name,
                 "document_id": document_data.document_id,
                 "document_type": document_data.document_type,
@@ -199,120 +224,148 @@ class MongoStore:
                 "tags": document_data.tags
             })
             return True
+        
         except Exception as e:
             logger.error("Error storing document: %s", e)
             return False
         
-    def delete_document(self,document_id):
+    async def delete_document(self,document_id):
         try:
-            response=self.documents.delete_one({
+            response = await self.documents.delete_one({
                 "document_id":document_id
             })
             return response.deleted_count > 0 
+        
         except Exception as e:
             return False
     
-    def get_documents(self):
+    async def get_documents(self):
         try:
-            response=self.documents.find().sort("timestamp",1)
+            response = self.documents.find().sort("timestamp",1)
             
             result = []
-            for message in response:
+            async for message in response:
                 message["_id"] = str(message["_id"])
                 result.append(message)
+
             return result
         except Exception as e:
             return None
     
-    def create_user(self,user_data : MongoUser):
+    async def create_user(self,user_data : MongoUser):
         try:
             data={
                 "username":user_data.get("username"),
                 "user_id":user_data.get("user_id"),
                 "password":user_data.get("password"),
                 "email_id":user_data.get("email_id"),
-                "created_at":datetime.utcnow().isoformat(),
+                "created_at":datetime.now(timezone.utc).isoformat(),
                 "logged_in":user_data.get("logged_in"),
-                "last_logged_in":user_data.get("last_logged_in")
+                "last_logged_in":user_data.get("last_logged_in"),
+                "role":"user"
             }
-            response=self.users.find({
+            response = await self.users.find_one({
                 "username":user_data.get("username")
             })
-            if len(list(response))>0:
+            if response is not None:
                 return {
                     'status':"Fail",
                     'message':'Username already Exists'
                 }
             
             else:
-                response=self.users.find({
+                response = await self.users.find_one({
                 "email_id":user_data.get("email_id")
                 })
-                if len(list(response))>0:
+                if response is not None:
                     return {
                     'status':"Fail",
-                    'message':'Email_id already Exists'
+                    'message':'Email ID already Exists'
                 }
                 else:
-                    self.users.insert_one(data)
+                    await self.users.insert_one(data)
                     return {
                     'status':"success",
-                    'message':'Sign UP Successful!'
+                    'message':'Sign up Successful!'
                 }
                 
         except Exception as e:
             return {
-                    'status':"Fail",
+                    'status':"Error",
                     'message': f'Error:{e}'
                 }
     
-    def update_user_status(self, user_id, logged_in):
+    async def update_user_status(self, user_id, logged_in):
         try:
             if logged_in:
-                result = self.users.update_one({"user_id": user_id}, {"$set": {"logged_in": logged_in, "last_logged_in": datetime.utcnow().isoformat()}})
+                result = await self.users.update_one({"user_id": user_id}, {"$set": {"logged_in": logged_in, "last_logged_in": datetime.now(timezone.utc).isoformat()}})
             else:
-                result = self.users.update_one({"user_id": user_id}, {"$set": {"logged_in": logged_in}})
+                result = await self.users.update_one({"user_id": user_id}, {"$set": {"logged_in": logged_in}})
             if result.matched_count == 0:
                 return None
             return True
+        
         except Exception as e:
             logger.error("Error updating user status: %s", e)
             return None
-    
-    def get_user_details(self,email_id)-> UserDetails:
+
+    async def logout_stale_users(self, max_age_minutes: int = 30) -> int:
+        """Log out users whose active login is older than the allowed age."""
         try:
-            response=self.users.find({
+            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
+            result = await self.users.update_many(
+                {
+                    "logged_in": True,
+                    "last_logged_in": {"$lte": cutoff},
+                },
+                {"$set": {"logged_in": False}},
+            )
+            return result.modified_count
+        except Exception as e:
+            logger.error("Error logging out stale users: %s", e, exc_info=True)
+            return 0
+    
+    async def get_user_details(self,email_id) -> UserDetails:
+        try:
+            result = await self.users.find_one({
                 "email_id":email_id
             })
-            result=list(response)[0]
+
+            if result is None:
+                return None
+
             user_details={
                 "username":result.get("username"),
                 "password":result.get("password"),
                 "user_id":result.get("user_id"),
                 "email_id":result.get("email_id"),
                 "logged_in":result.get("logged_in")
+                ,"role":result.get("role", "user")
             }
             return user_details
+            
         except Exception as e:
             return None
     
-    def get_login_details(self,email_id):
+    async def get_login_details(self,email_id):
         try:
 
-            response=self.users.find({
+            response = await self.users.find_one({
                 "email_id":email_id
             })
-            result=list(response)
 
-            user=result[0]
+            if response is None:
+                return None 
+            
+            user = response
             logged_in = user.get("logged_in")
             last_logged_in = user.get("last_logged_in")
 
             if logged_in and last_logged_in:
                 last_login_time = datetime.fromisoformat(last_logged_in)
-                time_duration=datetime.utcnow()-last_login_time
-                if time_duration.total_seconds() > 3600:
-                    self.users.update_one(
+                time_duration=datetime.now(timezone.utc)-last_login_time
+                if time_duration.total_seconds() >= 30 * 60:
+                    await self.users.update_one(
                         {"email_id":email_id},
                         {"$set":{"logged_in":False}}
                         )
@@ -328,20 +381,20 @@ class MongoStore:
         except Exception as e:
             return None
 
-    def save_rag_log(self, session_id, query, context, answer):
+    async def save_rag_log(self, session_id, query, context, answer):
         try:
-            self.rag_logs.insert_one({
+            await self.rag_logs.insert_one({
                 "session_id": session_id,
                 "query": query,
                 "context": context,    
                 "answer": answer,         
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
             logger.info(f"Saved RAG log for session_id: {session_id}")
         except Exception as e:
             logger.error(f"Failed to save RAG log: {e}")
     
-    def get_average_metrics(self):
+    async def get_average_metrics(self):
         try:
             pipeline = [
                 {
@@ -356,7 +409,10 @@ class MongoStore:
             ]
             
             collection = self.db[settings.MONGODB_COLLECTION]
-            result = list(collection.aggregate(pipeline))
+            result =  []
+            cursor= await collection.aggregate(pipeline)
+            async for row in cursor:
+                result.append(row)
             
             if not result:
                 return {
@@ -376,3 +432,131 @@ class MongoStore:
             
         except Exception as e:
             return None
+
+### Conversation
+    async def get_conversation_count(self, session_id: str) -> int:
+        try:
+            return await self.conversation.count_documents({"session_id": session_id})
+        except Exception as e:
+            logger.error(f"Error counting conversation messages: {e}", exc_info=True)
+            return 0
+
+    async def get_conversation_messages(self, session_id: str, limit: int = 10):
+        try:
+            cursor = (
+                self.conversation
+                .find({"session_id": session_id})
+                .sort("timestamp", DESCENDING)
+                .limit(max(1, limit))
+            )
+            result = []
+            async for message in cursor:
+                result.append({
+                    "role": message.get("role", "unknown"),
+                    "content": message.get("content", ""),
+                    "agent_name": message.get("agent_name", "unknown"),
+                })
+            result.reverse()
+            return result
+        except Exception as e:
+            logger.error(f"Error retrieving conversation messages: {e}", exc_info=True)
+            return None
+        
+    async def save_conversation_message(self, message: dict) -> str:
+        try:
+            timestamp = message.get("timestamp") or datetime.now(timezone.utc).isoformat()
+            result = await self.conversation.insert_one({
+                        "session_id": message["session_id"],
+                        "role": message["role"],
+                        "content": message["content"],
+                        "timestamp": timestamp,
+                        "sources": message["sources"],
+                        "agent_name": message["agent_name"],
+                        "user_id": message["user_id"]
+                    })
+            return str(result.inserted_id)
+        except Exception as e:
+            logger.error(f"Error saving conversation message: {e}", exc_info=True)
+            return None
+        
+    async def replace_with_summary(self, session_id: str, summary_text: str) -> str:
+        try:
+            await self.conversation.delete_many({"session_id": session_id})
+            
+            result = await self.conversation.insert_one({
+                "session_id": session_id,
+                "role": "summary",
+                "content": summary_text,
+                "is_summary": True,
+                "timestamp": datetime.utcnow().isoformat(),
+                "sources": None,
+                "agent_name": "summary",
+                "user_id": None,
+            })
+            return str(result.inserted_id)
+        except Exception as e:
+            logger.error(f"Error replacing messages with summary: {e}", exc_info=True)
+            return None
+
+    # Workflows
+    
+    async def get_workflows(self, creator_id: str):
+        try:
+            cursor = self.workflows.find({"creator_id": creator_id}).sort(
+                "updated_timestamp", DESCENDING
+            )
+            workflows = []
+            async for workflow in cursor:
+                workflow.pop("_id", None)
+                workflows.append(workflow)
+            return workflows
+        except PyMongoError as e:
+            logger.error(f"Error retrieving workflows:{e}")
+            return None
+
+    async def get_workflow(self, workflow_id: str, creator_id: str):
+        try:
+            workflow = await self.workflows.find_one(
+                {"id": workflow_id, "creator_id": creator_id}
+            )
+            return workflow
+        except PyMongoError as e:
+            logger.error(f"Error retrieving workflow {e}")
+            return None
+
+    async def delete_workflow(self, workflow_id: str, creator_id: str) -> bool:
+        try:
+            result = await self.workflows.delete_one(
+                {"id": workflow_id, "creator_id": creator_id}
+            )
+            return result.deleted_count == 1
+        except PyMongoError as e:
+            logger.error(f"Error deleting workflow {e}")
+            return False
+
+
+    async def save_workflow(self, workflow: WorkflowBuilder) -> str | None:
+        try:
+            data = workflow.model_dump(mode="json")
+            await self.workflows.insert_one(data)
+            return workflow.id
+        
+        except PyMongoError as e:
+            logger.error(f"Error saving workflow:{e}")
+            return None
+
+    async def update_workflow(self, workflow: WorkflowBuilder, creator_id: str) -> bool:
+        try:
+            data = workflow.model_dump(mode="json")
+            data.pop("id", None)
+            data.pop("creator_id", None)
+            result = await self.workflows.update_one(
+                {"id": workflow.id, "creator_id": creator_id},
+                {"$set": data},
+            )
+            return result.matched_count == 1
+        except PyMongoError as e:
+            logger.error(f"Error updating workflow {e}")
+            return False
+
+        

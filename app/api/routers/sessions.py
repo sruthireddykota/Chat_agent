@@ -1,19 +1,19 @@
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from pymongo.errors import PyMongoError
 
-from app.repositeries.mongodb_server import MongoStore
 from app.api.dependencies import SessionRequest
-
-mongo = MongoStore()
+from app.api.auth import require_user_id, require_session_owner
 
 router = APIRouter(prefix="/api/v1", tags=["Sessions"])
 
 
 @router.post("/session/create", status_code=status.HTTP_201_CREATED)
-def create_session(data: SessionRequest):
+async def create_session(data: SessionRequest, req: Request):
+    require_user_id(req, data.user_id)
+    mongo = req.app.state.mongo_store
     try:
-        session_id = mongo.create_session(data.session_id, data.user_id)
+        session_id = await mongo.create_session(data.session_id, data.user_id)
 
         if session_id is None:
             raise HTTPException(
@@ -36,9 +36,11 @@ def create_session(data: SessionRequest):
         )
     
 @router.get("/sessions/{user_id}", status_code=status.HTTP_200_OK)
-def get_sessions(user_id: str, limit: int = 10):
+async def get_sessions(req: Request, user_id: str, limit: int = 10):
+    require_user_id(req, user_id)
+    mongo = req.app.state.mongo_store
     try:
-        sessions = mongo.get_sessions(user_id, limit)
+        sessions = await mongo.get_sessions(user_id, limit)
 
         if sessions is None:
             raise HTTPException(
@@ -62,9 +64,11 @@ def get_sessions(user_id: str, limit: int = 10):
 
 
 @router.delete("/session/delete", status_code=status.HTTP_200_OK)
-def delete_session(session_id: str):
+async def delete_session(session_id: str, req: Request):
+    await require_session_owner(req, session_id)
+    mongo = req.app.state.mongo_store
     try:
-        deleted = mongo.delete_session(session_id)
+        deleted = await mongo.delete_session(session_id)
 
         if not deleted:
             raise HTTPException(

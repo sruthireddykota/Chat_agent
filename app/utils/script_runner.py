@@ -2,13 +2,13 @@ import subprocess
 import sys
 import json
 from pathlib import Path
-from agent_framework import Skill, SkillScript
+from agent_framework import FileSkill, FileSkillScript
 from app.utils.logger import get_logger
 
 logger = get_logger()
 
 
-def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -> str:
+def script_runner(skill: FileSkill, script: FileSkillScript, args: dict | None = None) -> str:
 
     # 1. Input validation
     stdin_input = None
@@ -18,8 +18,9 @@ def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -
             raise ValueError("Input too large — max 50,000 characters")
 
     # 2. Build command
-    script_path = str(Path(skill.path) / script.path)
-    cmd = [sys.executable, script_path]
+    # script_path = str(Path(skill.path) / script.path)
+    script_path = Path(script.full_path)
+    cmd = [sys.executable, str(script_path)]
 
     if args:
         if "command" in args and args["command"]:
@@ -34,8 +35,7 @@ def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -
     # 3. Log start
     logger.info(json.dumps({
         "event": "skill_script_start",
-        "skill": skill.name,
-        "script": str(script.path),
+        "script": str(script.full_path),
         "cmd": cmd,
         "input_length": len(stdin_input) if stdin_input else 0,
     }))
@@ -49,19 +49,18 @@ def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -
             text=True,
             timeout=90,
         )
+
     except subprocess.TimeoutExpired:
         logger.error(json.dumps({
             "event": "skill_script_timeout",
-            "skill": skill.name,
-            "script": str(script.path),
+            "script": str(script.full_path),
         }))
         raise RuntimeError(f"Script timed out after 90s: {script_path}")
 
     # 5. Log complete
     logger.info(json.dumps({
         "event": "skill_script_complete",
-        "skill": skill.name,
-        "script": str(script.path),
+        "script": str(script.full_path),
         "exit_code": result.returncode,
         "output_length": len(result.stdout),
         "stderr": result.stderr[:500] if result.stderr else None,
@@ -72,7 +71,6 @@ def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -
         if result.stderr and result.stderr.strip():
             logger.error(json.dumps({
                 "event": "skill_script_failed",
-                "skill": skill.name,
                 "exit_code": result.returncode,
                 "stderr": result.stderr[:1000],
             }))
@@ -82,7 +80,6 @@ def script_runner(skill: Skill, script: SkillScript, args: dict | None = None) -
         else:
             logger.warning(json.dumps({
                 "event": "skill_script_no_input",
-                "skill": skill.name,
                 "exit_code": result.returncode,
                 "stdout": result.stdout[:200],
             }))

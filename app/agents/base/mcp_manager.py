@@ -1,5 +1,5 @@
 from agent_framework import MCPStdioTool, MCPStreamableHTTPTool
-from typing import Optional, Dict, List
+from typing import List
 import os
 
 from contextlib import asynccontextmanager
@@ -34,13 +34,12 @@ class MCPManager:
 
         # huggingface (ResearcherAgent)
         "repo_search": ("huggingface", "hub_repo_search"),
-        "papers_search": ("huggingface", "paper_search"),
         "spaces_search": ("huggingface", "space_search"),
         "documentation_search": ("huggingface", "hf_doc_search"),
         "repository_details": ("huggingface", "hub_repo_details"),
 
         # rag (RAGAgent)
-        "rag_retreival": "mcp_tool",
+        "rag_retrieval": "mcp_tool",
         "mcp_tool": "mcp_tool",
         "get_history": "mcp_tool"
     }
@@ -54,9 +53,7 @@ class MCPManager:
         needs_filesystem = any(
             self.TOOL_TO_SERVER.get(t) == "filesystem" for t in allowed_set
         )
-        # Filesystem access does not require the optional shell MCP server.
-        # The shell package can terminate during MCP initialization, which
-        # would otherwise prevent all Coder requests from starting.
+        
         needs_shell = "shell" in allowed_set
         needs_workspace = needs_filesystem or needs_shell
 
@@ -165,12 +162,9 @@ class MCPManager:
         return MCPStreamableHTTPTool(
             name="mcp_tool",
             url=self.settings.MCP_URL,
-            allowed_tools=["rag_retrive", "get_chat_history"],
-
+            allowed_tools=["rag_retrieval", "get_chat_history"],
         )
     
-    
-
     def _get_mcp_huggingface_client(self, hf_tools_requested: List[str]) -> MCPStreamableHTTPTool:
         return MCPStreamableHTTPTool(
             name="hf_mcp",
@@ -178,7 +172,6 @@ class MCPManager:
             headers={"Authorization": f"Bearer {os.getenv('HF_TOKEN')}"},
             allowed_tools=hf_tools_requested,
             additional_tool_argument_names={
-            "paper_search": ["query"],
             "space_search": ["query"],
             "hf_doc_search": ["query"],
         },

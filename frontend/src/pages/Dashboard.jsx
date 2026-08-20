@@ -44,7 +44,7 @@ export default function Dashboard() {
     <AppShell>
       <div className="mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-          Welcome back, {user?.username} 👋
+          Welcome back, {user?.username} 
         </h1>
         <p className="mt-1.5 text-slate-500">
           Your multi-agent workspace. Pick a tool to get started.

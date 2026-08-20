@@ -130,8 +130,6 @@ services:
       context: .
       dockerfile: Dockerfile.fastapi
     container_name: chatservices-fastapi
-    ports:
-      - "8001:8001"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -152,18 +150,52 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  kong:
+    image: kong:3.9.1
+    container_name: chat-kong
+    depends_on:
+      fastapi:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_STATUS_LISTEN: 0.0.0.0:8100
+      JWT_SECRET: ${JWT_SECRET}
+      KONG_JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - ./kong.yml:/kong/declarative/kong.yml:ro
+      - ./kong-entrypoint.sh:/kong/kong-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/kong/kong-entrypoint.sh"]
+    ports:
+      - "8002:8000"
+      - "8445:8443"
+    networks:
+      - agent_framework
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:8001
+        VITE_API_URL: http://localhost:8002
     container_name: chat-frontend
     ports:
       - "80:80"
     depends_on:
-      fastapi:
+      kong:
         condition: service_healthy
     networks:
       - agent_framework

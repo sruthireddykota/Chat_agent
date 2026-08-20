@@ -9,6 +9,7 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `d-${Math.random()
 export default function DocumentParser() {
   const [file, setFile] = useState(null);
   const [urls, setUrls] = useState("");
+  const [activeTab, setActiveTab] = useState("file");
   const [format, setFormat] = useState("md");
   const [options, setOptions] = useState({ ocr: false, table: true, picture: true, code: false, formula: false, image_scale: 2, table_mode: "fast" });
   const [parsed, setParsed] = useState(null);
@@ -107,24 +108,48 @@ export default function DocumentParser() {
         </Card>
 
         <div>
-          <Card className="p-6">
-            <label className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center hover:border-brand-400 hover:bg-brand-50/40">
-              <UploadCloud size={30} className="text-slate-400 group-hover:text-brand-500" />
-              <div className="text-sm font-medium text-slate-700">{file ? file.name : "Click to upload a document"}</div>
-              <div className="text-xs text-slate-400">PDF, DOCX, XLSX, CSV, JPEG, PNG</div>
-              <input type="file" accept=".pdf,.docx,.xlsx,.csv,.jpeg,.jpg,.png" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] || null); setParsed(null); setChunks(null); setEmbeddings(null); }} />
-            </label>
-            <div className="mt-4 flex gap-2">
-              <Button onClick={process} disabled={!file || busy}>{busy === "process" ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} Process document</Button>
-              <Button variant="danger" onClick={clear}>Clear</Button>
+          <Card className="overflow-hidden">
+            <div className="flex border-b border-slate-100 p-2">
+              {[
+                { id: "file", label: "File upload" },
+                { id: "url", label: "URL parsing" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    activeTab === tab.id
+                      ? "bg-brand-50 text-brand-700"
+                      : "text-slate-500 hover:bg-slate-50"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            {message && <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${message.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{message.text}</div>}
-          </Card>
 
-          <Card className="mt-6 p-5">
-            <h3 className="mb-2 text-sm font-semibold text-slate-700">Process document URLs</h3>
-            <textarea value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="https://example.com/document.pdf\nhttps://example.com/report.docx" className="h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400" />
-            <Button className="mt-3" variant="secondary" onClick={processUrls} disabled={!urls.trim() || busy}>{busy === "url" ? <Loader2 size={16} className="animate-spin" /> : null} Process URLs</Button>
+            {activeTab === "file" ? (
+              <div className="p-6">
+                <label className="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center hover:border-brand-400 hover:bg-brand-50/40">
+                  <UploadCloud size={30} className="text-slate-400 group-hover:text-brand-500" />
+                  <div className="text-sm font-medium text-slate-700">{file ? file.name : "Click to upload a document"}</div>
+                  <div className="text-xs text-slate-400">PDF, DOCX, XLSX, CSV, JPEG, PNG</div>
+                  <input type="file" accept=".pdf,.docx,.xlsx,.csv,.jpeg,.jpg,.png" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] || null); setParsed(null); setChunks(null); setEmbeddings(null); }} />
+                </label>
+                <div className="mt-4 flex gap-2">
+                  <Button onClick={process} disabled={!file || busy}>{busy === "process" ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} Process document</Button>
+                  <Button variant="danger" onClick={clear}>Clear</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-5">
+                <h3 className="mb-2 text-sm font-semibold text-slate-700">Process document URLs</h3>
+                <textarea value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="https://example.com/document.pdf\nhttps://example.com/report.docx" className="h-24 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-400" />
+                <Button className="mt-3" variant="secondary" onClick={processUrls} disabled={!urls.trim() || busy}>{busy === "url" ? <Loader2 size={16} className="animate-spin" /> : null} Process URLs</Button>
+              </div>
+            )}
+            {message && <div className={`mx-5 mb-5 rounded-xl border px-4 py-3 text-sm ${message.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{message.text}</div>}
           </Card>
 
           {parsed && <Card className="mt-6 p-5">

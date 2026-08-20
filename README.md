@@ -5,7 +5,7 @@ Chat Agent is a Dockerized multi-agent application with a React frontend and Fas
 ## Architecture
 
 ```text
-Browser → React frontend (:80) → FastAPI REST API (:8001)
+Browser → React frontend (:80) → Kong gateway (:8002) → FastAPI REST API (:8001)
                                       ├─ MongoDB: sessions, messages, metadata
                                       ├─ Redis: internal agent publish/cache support
                                       ├─ Qdrant: document vectors and retrieval
@@ -14,6 +14,24 @@ Browser → React frontend (:80) → FastAPI REST API (:8001)
 ```
 
 The frontend uses REST/HTTP only. It does not open a websocket connection. Redis remains an internal backend dependency.
+
+## Kong gateway
+
+Kong runs in DB-less mode and proxies `/api/*` to the FastAPI service. The browser-facing proxy is available at `http://localhost:8002`; the FastAPI container remains private to the Docker network. The declarative gateway configuration is in `kong.yml`.
+
+Start the stack with `docker compose up --build`. The frontend is built with `http://localhost:8002` as its API base URL, and Kong waits for the FastAPI health check before starting the frontend.
+
+### Authentication
+
+Login issues an HS256 bearer JWT. Add the same strong random value to the root `.env` file before starting the stack:
+
+```env
+JWT_SECRET=<at-least-32-character-random-secret>
+JWT_ISSUER=chat-agent
+JWT_EXPIRE_MINUTES=60
+```
+
+Kong validates JWTs before forwarding protected API requests, and FastAPI validates them again. Health, login, and signup are public. Sessions, chat history, agent execution, workspaces, documents, and metrics require a valid token; session operations are restricted to the owning user. Admin endpoints require a MongoDB user record with `role: "admin"`.
 
 ## Project Structure
 
@@ -268,7 +286,7 @@ GET  /api/v1/documents/get
 
 ## RAG flow and evaluation
 
-Documents are embedded into the `Documents` Qdrant collection. The RAG agent calls the MCP `rag_retrive` tool, which returns both a formatted response and the retrieved `chunks`. Those chunks are preserved as `context` and passed to RAG evaluation.
+Documents are embedded into the `Documents` Qdrant collection. The RAG agent calls the MCP `rag_retrieval` tool, which returns both a formatted response and the retrieved `chunks`. Those chunks are preserved as `context` and passed to RAG evaluation.
 
 The RAG Evaluation page accepts a CSV containing a `Questions`, `question`, or `Question` column. It runs each question through the RAG agent, calculates Answer Relevance, Context Relevance, and Groundedness with DeepEval, saves scores to MongoDB, and displays the results.
 

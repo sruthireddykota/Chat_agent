@@ -1,17 +1,16 @@
-from fastapi import APIRouter, status,HTTPException
+from fastapi import APIRouter, status,HTTPException,Request
 from pymongo.errors import PyMongoError
-from app.repositeries.mongodb_server import MongoStore
+from app.api.auth import require_role
 
-
-mongo=MongoStore()
-router = APIRouter(prefix="/admin", tags=["Admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
 
 @router.get("",status_code=status.HTTP_200_OK)
-def login_details(email_id: str,):
+async def login_details(email_id: str, req: Request):
+    require_role(req, "admin")
     try:
-
-        user_login = mongo.get_login_details(email_id=email_id)
+        mongo = req.app.state.mongo_store
+        user_login = await mongo.get_login_details(email_id=email_id)
         if user_login is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

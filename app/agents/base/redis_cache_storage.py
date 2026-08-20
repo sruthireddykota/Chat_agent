@@ -34,10 +34,10 @@ class RedisStorage:
             finally:
                 self.client = None
 
-    def _serialize(self, value: Any) -> str:
+    async def _serialize(self, value: Any) -> str:
         return value if isinstance(value, str) else json.dumps(value)
 
-    def _build_key(self, key: str, serialized_value: str) -> str:
+    async def _build_key(self, key: str, serialized_value: str) -> str:
         """Composes a content-addressed key as key + hex digest of the value's content."""
         digest = hashlib.sha256(serialized_value.encode("utf-8")).hexdigest()[:16]
         return f"{key}:{digest}"
@@ -78,8 +78,8 @@ class RedisStorage:
         key on success so the caller can store it for later get/delete.
         """
         try:
-            serialized = self._serialize(value)
-            composed_key = self._build_key(key, serialized) if use_content_hash else key
+            serialized = await self._serialize(value)
+            composed_key = await self._build_key(key, serialized) if use_content_hash else key
 
             async with self._session() as client:
                 if ttl:

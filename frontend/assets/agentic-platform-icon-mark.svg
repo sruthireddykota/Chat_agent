@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B2B52"/>
+      <stop offset="100%" stop-color="#122040"/>
+    </linearGradient>
+    <linearGradient id="petalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- square background -->
+  <rect width="256" height="256" rx="48" fill="url(#bg)"/>
+
+  <!-- abstract tri-node mark, enlarged to fill the frame -->
+  <g transform="translate(128,132)">
+    <path d="M0,0 C-32,-35 -35,-90 0,-115 C35,-90 32,-35 0,0 Z"
+          fill="url(#petalGrad)" transform="rotate(0)"/>
+    <path d="M0,0 C-32,-35 -35,-90 0,-115 C35,-90 32,-35 0,0 Z"
+          fill="url(#petalGrad)" opacity="0.82" transform="rotate(120)"/>
+    <path d="M0,0 C-32,-35 -35,-90 0,-115 C35,-90 32,-35 0,0 Z"
+          fill="url(#petalGrad)" opacity="0.64" transform="rotate(240)"/>
+    <circle cx="0" cy="0" r="15" fill="#122040"/>
+  </g>
+</svg>

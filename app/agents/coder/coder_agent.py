@@ -14,7 +14,7 @@ logger = get_logger()
 
 class CoderAgent(BaseAgent):
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, mongodb_storage, azure_client):
         super().__init__(session_id=session_id, allowed_tools=[
             "list_allowed_directories",
             "read_file",
@@ -30,7 +30,7 @@ class CoderAgent(BaseAgent):
             "move_file",
             "search_files",
             "get_file_info",
-            "get_history"])
+            "get_history"],mongodb_storage=mongodb_storage,azure_client=azure_client)
 
         self.base_instructions = CoderAgentInstructions().get_instructions()
         self.coder_tools = CoderTools(
@@ -45,6 +45,8 @@ class CoderAgent(BaseAgent):
             session_id = requestdata["session_id"]
             query = requestdata["query"]
             user_id = requestdata["user_id"]
+            self.coder_tools.authorization = requestdata.get("authorization")
+            tools_list = await self.coder_tools.get_tool_functions()
 
             coder_skills = SkillsProvider.from_paths(
                 skill_paths=[Path(__file__).parent.parent / "skills"],
@@ -54,26 +56,17 @@ class CoderAgent(BaseAgent):
                 disable_run_skill_script_approval=True,
             )
 
-            message = self.build_message(query=query)
-
             async with self.mcp_manager.mcp_session():
 
-                history = await self.coder_tools._get_history()
-
-                instructions = (
-                    f"{self.base_instructions}\n\n"
-                    "---\n\n"
-                    "## Conversation History (already retrieved, do not call get_history again)\n"
-                    f"{history}"
-                )
+                message = await self.build_message(query=query)
 
                 agent = Agent(
                     name=AgentType.CODER,
                     client=self.client,
-                    instructions=instructions,
+                    instructions=self.base_instructions,
                     tools=[
                         self.client.get_code_interpreter_tool(),
-                        *self.coder_tools.get_tool_functions(),
+                        tools_list,
                     ],
                     context_providers=[coder_skills]
                 )
@@ -83,7 +76,7 @@ class CoderAgent(BaseAgent):
                 )
 
                 if response:
-                    self.mongo_message_store(
+                    await self.mongo_message_store(
                         session_id=session_id,
                         response=response,
                         user_id=user_id,
